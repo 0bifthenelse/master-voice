@@ -1,0 +1,12 @@
+[package]
+name = "master-voice-audio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+parking_lot = { workspace = true }
+cpal = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

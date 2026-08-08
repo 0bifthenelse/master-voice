@@ -1,0 +1,18 @@
+[package]
+name = "master-voice-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+parking_lot = { workspace = true }
+master-voice-linguistics = { path = "../linguistics" }
+master-voice-synth = { path = "../synth" }
+master-voice-audio = { path = "../audio" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
