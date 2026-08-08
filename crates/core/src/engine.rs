@@ -34,7 +34,10 @@ impl EngineSettings {
             rate: config.rate.unwrap_or(1.0).clamp(0.5, 2.0),
             pitch: config.pitch.unwrap_or(1.0).clamp(0.5, 1.5),
             volume: config.volume.unwrap_or(1.0).clamp(0.0, 2.0),
-            robotic_depth: config.robotic_depth.unwrap_or(0.55).clamp(0.0, 1.0),
+            robotic_depth: config
+                .robotic_depth
+                .unwrap_or(master_voice_synth::character::DEFAULT_ROBOTIC_DEPTH)
+                .clamp(0.0, 1.0),
         }
     }
 
@@ -150,7 +153,10 @@ mod tests {
     fn settings_from_default_config() {
         let settings = EngineSettings::from_config(&Config::default());
         assert_eq!(settings.rate, 1.0);
-        assert_eq!(settings.robotic_depth, 0.55);
+        assert_eq!(
+            settings.robotic_depth,
+            master_voice_synth::character::DEFAULT_ROBOTIC_DEPTH
+        );
         assert_eq!(settings.language, None);
     }
 

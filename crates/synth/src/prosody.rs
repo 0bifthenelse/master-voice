@@ -599,6 +599,7 @@ pub fn build_frames_chunk(phonemes: &[Phoneme], opts: &SynthOptions, pos: ChunkP
     let mut phoneme_start = vec![0usize; phonemes.len()];
     let mut phoneme_end = vec![0usize; phonemes.len()];
     let mut last_formants: ([f32; 5], [f32; 5]) = ([0.0; 5], [0.0; 5]);
+    let mut last_av: f32 = 0.0;
 
     for (i, p) in phonemes.iter().enumerate() {
         phoneme_start[i] = cursor;
@@ -664,6 +665,7 @@ pub fn build_frames_chunk(phonemes: &[Phoneme], opts: &SynthOptions, pos: ChunkP
                     }
                 }
                 last_formants = (frame.f, frame.bw);
+                last_av = frame.av;
                 tagged.push(Tagged {
                     frame,
                     phoneme: i,
@@ -675,18 +677,26 @@ pub fn build_frames_chunk(phonemes: &[Phoneme], opts: &SynthOptions, pos: ChunkP
         }
         phoneme_end[i] = cursor;
 
-        // Pauses (none trailing a non-final chunk).
+        // Pauses (none trailing a non-final chunk). A `Word` pause keeps
+        // a soft voicing tail from the previous phoneme so the gap reads
+        // as a step between words, not a hard restart; clause and
+        // sentence pauses stay silent (breath groups).
         let trailing = !pos.last && i + 1 == phonemes.len();
         if p.boundary_after != Boundary::None && !trailing {
             let pause_s = pause_for(p.boundary_after);
             if pause_s > 0.0 {
                 let n = ((pause_s * sr) / FRAME_SAMPLES as f32).round().max(1.0) as usize;
+                let carry = if p.boundary_after == Boundary::Word {
+                    last_av * 0.5
+                } else {
+                    0.0
+                };
                 for _ in 0..n {
                     let mut frame = Frame::new();
                     frame.f = last_formants.0;
                     frame.bw = last_formants.1;
                     frame.oq = oq;
-                    frame.f0 = character::BASE_F0 * pitch * 0.5;
+                    frame.av = carry;
                     tagged.push(Tagged {
                         frame,
                         phoneme: i,
@@ -793,12 +803,14 @@ pub fn build_frames_chunk(phonemes: &[Phoneme], opts: &SynthOptions, pos: ChunkP
     let mut frames = Vec::with_capacity(tagged.len());
     for tag in tagged {
         let mut frame = tag.frame;
-        if tag.pause {
-            frame.f0 = character::BASE_F0 * pitch * 0.5;
-        } else {
-            let t = tag.sample + FRAME_SAMPLES as f32 * 0.5;
-            let m = interp(&anchors[phrase_of[tag.phoneme]], t);
-            frame.f0 = character::BASE_F0 * pitch * m;
+        // f0 is the tune contour everywhere, pauses included: the last
+        // anchor already sits at the phrase end, so a word gap holds the
+        // phrase's f0 instead of dipping to half pitch (which made every
+        // word boundary sound like a restart).
+        let t = tag.sample + FRAME_SAMPLES as f32 * 0.5;
+        let m = interp(&anchors[phrase_of[tag.phoneme]], t);
+        frame.f0 = character::BASE_F0 * pitch * m;
+        if !tag.pause {
             // Step 3d: per-phoneme pitch shift (after the tune contour).
             frame.f0 *= 1.0 + phonemes[tag.phoneme].pitch_shift;
         }
@@ -956,6 +968,57 @@ mod tests {
         );
         assert!(final_chunk.len() > mid_chunk.len());
         assert!(final_chunk.last().unwrap().av == 0.0);
+    }
+
+    #[test]
+    fn word_pause_holds_contour_f0() {
+        // A word gap must not dip f0 to half pitch: the tune contour
+        // continues through the pause, so the boundary sounds like a step
+        // between words, not a restart.
+        let mut a = Phoneme::new(PhonemeKind::AH);
+        a.boundary_after = Boundary::Word;
+        let opts = SynthOptions {
+            robotic_depth: 0.0,
+            ..SynthOptions::default()
+        };
+        let frames = build_frames(&[a, Phoneme::new(PhonemeKind::AH)], &opts);
+        let gap: Vec<&Frame> = frames
+            .iter()
+            .filter(|f| f.af == 0.0 && f.ah == 0.0 && f.av > 0.0 && f.av < 1.0)
+            .collect();
+        assert!(!gap.is_empty(), "expected a word pause with a voicing tail");
+        for f in &gap {
+            assert!(
+                f.f0 >= character::BASE_F0 * 0.65,
+                "pause f0 {} dips below the contour",
+                f.f0
+            );
+        }
+    }
+
+    #[test]
+    fn word_pause_carries_voicing_tail() {
+        // Voiced -> word gap -> voiced: the gap keeps a soft voicing tail
+        // (natural word transition). After an unvoiced phoneme it stays
+        // silent.
+        let opts = SynthOptions::default();
+        let gap_av = |frames: &[Frame]| {
+            frames
+                .iter()
+                .filter(|f| f.af == 0.0 && f.ah == 0.0 && f.av > 0.0 && f.av < 1.0)
+                .map(|f| f.av)
+                .fold(0.0f32, f32::max)
+        };
+
+        let mut a = Phoneme::new(PhonemeKind::AH);
+        a.boundary_after = Boundary::Word;
+        let voiced = build_frames(&[a, Phoneme::new(PhonemeKind::AH)], &opts);
+        assert!(gap_av(&voiced) > 0.1, "voicing tail missing");
+
+        let mut s = Phoneme::new(PhonemeKind::S);
+        s.boundary_after = Boundary::Word;
+        let unvoiced = build_frames(&[s, Phoneme::new(PhonemeKind::AH)], &opts);
+        assert_eq!(gap_av(&unvoiced), 0.0, "unvoiced gap must stay silent");
     }
 
     #[test]

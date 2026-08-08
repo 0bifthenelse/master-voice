@@ -8,17 +8,20 @@
 /// Hz, phrase base pitch.
 pub const BASE_F0: f32 = 118.0;
 /// Shipped character depth: unmistakable character, crisp consonants.
-pub const DEFAULT_ROBOTIC_DEPTH: f32 = 0.55;
+/// 0.82 = 50 % more robotic than the original 0.55 default: 82 % of the
+/// semitone staircase, twin source at 41 % mix, ring at ~13 % wet.
+pub const DEFAULT_ROBOTIC_DEPTH: f32 = 0.82;
 /// Twin source offset, cents.
 pub const DETUNE_CENTS: f32 = 6.0;
-/// Twin mix, × depth; hard cap 0.50.
-pub const DETUNE_MIX_MAX: f32 = 0.45;
+/// Twin mix, × depth; hard cap 0.50 (an equal-level twin hollows F1).
+pub const DETUNE_MIX_MAX: f32 = 0.50;
 /// Ring modulator rate, Hz.
 pub const RING_HZ: f32 = 62.0;
-/// Ring wet, × depth; hard cap 0.25. 0.12 keeps the sidebands at
-/// -18 dB so the measured formant positions stay within V3's 5% (0.22
-/// pushed AA's F1-window peak onto the F1 skirt).
-pub const RING_WET_MAX: f32 = 0.12;
+/// Ring wet, × depth; hard cap 0.25. 0.16 keeps the sidebands weak
+/// enough that the measured formant positions stay within V3's 5%
+/// (0.22 pushed AA's F1-window peak onto the F1 skirt); 0.16 is the
+/// strongest wet that passed V3 during the 0.82-depth rebalance.
+pub const RING_WET_MAX: f32 = 0.16;
 /// Glottal period jitter, × (1.0 - depth).
 pub const JITTER_MAX: f32 = 0.010;
 /// Open quotient at depth 0. The pulse's spectral nulls sit at

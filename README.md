@@ -3,12 +3,32 @@
 Offline, Linux-first synthetic speech system in Rust. Robotic but highly
 intelligible voice (Klatt-style formant synthesis — no models, no network, no
 system packages). One engine behind a CLI, an MCP server, and OMP automatic
-speech.
+speech. Word transitions are smoothed: f0 follows the intonation contour
+continuously across word gaps (no pitch dips) and voiced gaps carry a soft
+voicing tail, so boundaries sound like steps between words rather than
+restarts.
 
 Supported languages: **French (fr-FR, first-class)** and **English (en-US)**,
 with automatic per-sentence language routing; when routing is inconclusive
 the fallback language is French. Spanish/German/Italian are not implemented;
 the engine architecture accepts new languages as new G2P modules.
+
+## Quick start
+
+```sh
+cargo build --workspace --release
+target/release/master-voice "Hello, MASTER voice is online."
+target/release/master-voice --robotic 0.9 "Full replicant mode."  # 0.0 plain, 1.0 max
+target/release/master-voice --output-wav /tmp/out.wav "Save to WAV instead of playing"
+```
+
+That is the whole system: one binary, no configuration, no network. Language
+routing, pronunciation overrides, the auto-spawned playback daemon and the
+streaming MCP server all work out of the box; the rest of this file is the
+detail. The default character (robotic_depth 0.82) is a semitone-stepped,
+detuned-twin, ring-modulated REPLICANT — unmistakably synthetic, still
+intelligible. `--robotic` overrides the amount for one call so you can
+audition the range by ear.
 
 ## Build
 
@@ -63,7 +83,7 @@ language = "auto"            # "fr-FR" | "en-US" | "auto"
 rate = 1.0                   # speech rate multiplier
 pitch = 1.0                  # pitch multiplier
 volume = 1.0                 # output volume multiplier
-robotic_depth = 0.55         # 0.0 = plain speech, 1.0 = full replicant
+robotic_depth = 0.82         # 0.0 = plain speech, 1.0 = full replicant
 device = "default"           # optional output device name (see `master-voice devices`)
 queue_limit = 16             # bounded playback FIFO
 daemon_idle_timeout_secs = 300
@@ -130,12 +150,13 @@ cargo test --workspace
 cargo build --workspace --release
 ```
 
-150 tests: G2P corpora (fr/en), interjections, exclamation boundaries,
+152 tests: G2P corpora (fr/en), interjections, exclamation boundaries,
 discontiguous French negation pitch shaping, normalization, numbers,
 sentence boundaries, overrides, synthesis determinism, resonator state
-(V1), chunked render bit-identity (V4), formant spectrum (V2/V3), queue
-semantics, stream chunking, shell-safety battery (no input text can
-execute), MCP protocol end-to-end, CLI behaviors.
+(V1), chunked render bit-identity (V4), formant spectrum (V2/V3),
+word-gap f0/voicing continuity, queue semantics, stream chunking,
+shell-safety battery (no input text can execute), MCP protocol
+end-to-end, CLI behaviors.
 
 ## License
 
