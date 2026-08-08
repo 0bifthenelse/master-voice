@@ -1,12 +1,12 @@
 use crate::phoneme::PhonemeKind::{self, *};
 
 const DICT_FR: &[(&str, &[PhonemeKind])] = &[
-    ("aujourd'hui", &[OW, Z, UW, RR, D, UE, IY]),
-    ("monsieur", &[M, AX, S, ZH, OE]),
+    ("aujourd'hui", &[OW, ZH, UW, RR, D, UE, IY]),
+    ("monsieur", &[M, AX, S, Y, OE]),
     ("madame", &[M, AA, D, AA, M]),
     ("mademoiselle", &[M, AA, D, M, W, AA, Z, EH, L]),
-    ("messieurs", &[M, EH, S, ZH, OE]),
-    ("gens", &[Z, AN]),
+    ("messieurs", &[M, EH, S, Y, OE]),
+    ("gens", &[ZH, AN]),
     ("fils", &[F, IY, S]),
     ("six", &[S, IY, S]),
     ("dix", &[D, IY, S]),
@@ -37,7 +37,7 @@ const DICT_FR: &[(&str, &[PhonemeKind])] = &[
     ("sens", &[S, AN, S]),
     ("bus", &[B, UE, S]),
     ("virus", &[V, IY, RR, UE, S]),
-    ("gentil", &[Z, AN, T, IY]),
+    ("gentil", &[ZH, AN, T, IY]),
     ("plomb", &[P, L, ON]),
     ("cap", &[K, AA, P]),
     ("stop", &[S, T, AO, P]),
@@ -66,7 +66,7 @@ const DICT_FR: &[(&str, &[PhonemeKind])] = &[
     ("ces", &[S, EY]),
     ("le", &[L, AX]),
     ("de", &[D, AX]),
-    ("je", &[Z, AX]),
+    ("je", &[ZH, AX]),
     ("me", &[M, AX]),
     ("te", &[T, AX]),
     ("se", &[S, AX]),
@@ -85,6 +85,28 @@ const DICT_FR: &[(&str, &[PhonemeKind])] = &[
     ("ennemi", &[EH, N, M, IY]),
     ("femme", &[F, AA, M]),
     ("énergie", &[EY, N, EH, RR, ZH, IY]),
+    ("ah", &[AA]),
+    ("oh", &[OW]),
+    ("eh", &[EH]),
+    ("hé", &[EY]),
+    ("ha", &[AA]),
+    ("hi", &[IY]),
+    ("hop", &[AO, P]),
+    ("ouf", &[UW, F]),
+    ("zut", &[Z, UE, T]),
+    ("aïe", &[AA, Y]),
+    ("bravo", &[B, RR, AA, V, OW]),
+    ("ouah", &[W, AA]),
+    ("wouah", &[W, AA]),
+    ("euh", &[OE]),
+    ("beurk", &[B, OEU, RR, K]),
+    ("bof", &[B, AO, F]),
+    ("pouah", &[P, W, AA]),
+    ("ouais", &[W, EH]),
+    ("ouai", &[W, EH]),
+    ("oups", &[UW, P, S]),
+    ("hein", &[EN]),
+    ("ahem", &[AA, EH, M]),
 ];
 
 fn lookup(word: &str) -> Option<Vec<PhonemeKind>> {
@@ -113,10 +135,10 @@ fn spell_letter_fr(c: char) -> Vec<PhonemeKind> {
         'd' => vec![D, EY],
         'e' => vec![AX],
         'f' => vec![EH, F],
-        'g' => vec![Z, EY],
+        'g' => vec![ZH, EY],
         'h' => vec![AA, SH],
         'i' => vec![IY],
-        'j' => vec![Z, IY],
+        'j' => vec![ZH, IY],
         'k' => vec![K, AA],
         'l' => vec![EH, L],
         'm' => vec![EH, M],
@@ -181,8 +203,12 @@ pub fn symbol(sym: &str) -> Option<PhonemeKind> {
     en::symbol(sym)
 }
 
+fn strip_punct(word: &str) -> &str {
+    word.trim_end_matches(['.', ',', '!', '?', ';', ':', '"', ')', ']', '»'])
+}
+
 pub fn phonemize_word(word: &str) -> Vec<(PhonemeKind, u8)> {
-    let lower = word.to_lowercase();
+    let lower = strip_punct(word).to_lowercase();
     if lower.len() == 1 {
         return spell_letter_fr(lower.chars().next().unwrap_or(' '))
             .into_iter()
@@ -211,7 +237,7 @@ pub fn phonemize_word(word: &str) -> Vec<(PhonemeKind, u8)> {
                 let elision = match *part {
                     "l" => Some(L),
                     "d" => Some(D),
-                    "j" => Some(Z),
+                    "j" => Some(ZH),
                     "c" => Some(S),
                     "n" => Some(N),
                     "s" => Some(S),
@@ -223,7 +249,7 @@ pub fn phonemize_word(word: &str) -> Vec<(PhonemeKind, u8)> {
                         continue;
                     }
                     "jusqu" => {
-                        out.extend([(Z, 0), (UE, 0), (S, 0), (K, 0)]);
+                        out.extend([(ZH, 0), (UE, 0), (S, 0), (K, 0)]);
                         continue;
                     }
                     "puisqu" => {
@@ -242,6 +268,74 @@ pub fn phonemize_word(word: &str) -> Vec<(PhonemeKind, u8)> {
         return out;
     }
     rules(&lower)
+}
+
+const NEGATIVE_KEYWORDS: &[&str] = &[
+    "pas",
+    "jamais",
+    "plus",
+    "rien",
+    "personne",
+    "point",
+    "guère",
+    "que",
+    "nullement",
+];
+
+/// Weak-form "ne" pitch dip.
+const NEG_NE_SHIFT: f32 = -0.06;
+/// Pitch fall on the last vowel of the negative keyword.
+const NEG_FALL: f32 = -0.15;
+/// Per-syllable downward step between "ne" and the keyword.
+const NEG_STEP: f32 = 0.05;
+/// Maximum accumulated intermediate step.
+const NEG_STEP_MAX: u32 = 5;
+
+fn is_ne_word(word: &str) -> bool {
+    word == "ne" || word.starts_with("n'")
+}
+
+fn is_negative_keyword(word: &str) -> bool {
+    NEGATIVE_KEYWORDS.contains(&word)
+}
+
+/// Phonemize one clause with discontiguous negation ("ne ... pas") pitch
+/// shaping: the weak "ne" dips, intermediate vowels step down per syllable,
+/// and the negative keyword's last vowel falls.
+pub fn phonemize_clause(words: &[&str]) -> Vec<(PhonemeKind, u8, f32)> {
+    let mut out = Vec::new();
+    let mut in_negation = false;
+    let mut step = 0u32;
+    for raw in words {
+        let word = strip_punct(raw);
+        let lower = word.to_lowercase();
+        let is_ne = is_ne_word(&lower);
+        let ends_negation = in_negation && is_negative_keyword(&lower);
+        let phones = phonemize_word(word);
+        let last_vowel_idx = phones.iter().rposition(|(k, _)| is_vowel_sound(*k));
+        for (i, (kind, stress)) in phones.into_iter().enumerate() {
+            let mut shift = 0.0;
+            if is_vowel_sound(kind) {
+                if ends_negation && Some(i) == last_vowel_idx {
+                    shift = NEG_FALL;
+                } else if in_negation {
+                    step += 1;
+                    shift = -NEG_STEP * (step.min(NEG_STEP_MAX) as f32);
+                } else if is_ne {
+                    shift = NEG_NE_SHIFT;
+                }
+            }
+            out.push((kind, stress, shift));
+        }
+        if is_ne {
+            in_negation = true;
+            step = 0;
+        }
+        if ends_negation {
+            in_negation = false;
+        }
+    }
+    out
 }
 
 fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
@@ -658,7 +752,7 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
                     i += 2;
                 } else if next == 'e' || next == 'i' || next == 'y' || next == 'é' || next == 'è'
                 {
-                    out.push(Z);
+                    out.push(ZH);
                     i += 1;
                 } else if next == 't' && i + 2 == n {
                     i += 2;
@@ -673,7 +767,7 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
                 i += 1;
             }
             'j' => {
-                out.push(Z);
+                out.push(ZH);
                 i += 1;
             }
             'k' => {
@@ -885,15 +979,22 @@ mod tests {
 
     #[test]
     fn corpus_words() {
-        assert_eq!(kinds("bonjour"), vec![B, ON, Z, UW, RR]);
-        assert_eq!(kinds("aujourd'hui"), vec![OW, Z, UW, RR, D, UE, IY]);
+        assert_eq!(kinds("bonjour"), vec![B, ON, ZH, UW, RR]);
+        assert_eq!(kinds("aujourd'hui"), vec![OW, ZH, UW, RR, D, UE, IY]);
         assert_eq!(kinds("système"), vec![S, IY, S, T, EH, M]);
-        assert_eq!(kinds("intelligence"), vec![EN, T, EH, L, IY, Z, AN, S]);
+        assert_eq!(kinds("intelligence"), vec![EN, T, EH, L, IY, ZH, AN, S]);
         assert_eq!(kinds("fonctionne"), vec![F, ON, K, S, Y, ON, N]);
         assert_eq!(
             kinds("opérationnel"),
             vec![AO, P, EY, RR, AA, S, Y, ON, N, EH, L]
         );
+    }
+
+    #[test]
+    fn j_elision_is_zh() {
+        // "j'ai" = /ʒɛ/ — the elided j is ZH (the 'ai' vowel is the
+        // codebase's regular /ɛ/ mapping, not /e/).
+        assert_eq!(kinds("j'ai"), vec![ZH, EH]);
     }
 
     #[test]
@@ -928,5 +1029,53 @@ mod tests {
         let word = phonemize_word("bonjour");
         let stressed = word.iter().filter(|(_, s)| *s == 1).count();
         assert_eq!(stressed, 1);
+    }
+
+    #[test]
+    fn interjections() {
+        assert_eq!(kinds("ah"), vec![AA]);
+        assert_eq!(kinds("oh"), vec![OW]);
+        assert_eq!(kinds("hé"), vec![EY]);
+        assert_eq!(kinds("zut"), vec![Z, UE, T]);
+        assert_eq!(kinds("bravo"), vec![B, RR, AA, V, OW]);
+        assert_eq!(kinds("euh"), vec![OE]);
+        assert_eq!(kinds("beurk"), vec![B, OEU, RR, K]);
+        assert_eq!(kinds("oups"), vec![UW, P, S]);
+        assert_eq!(kinds("hein"), vec![EN]);
+        assert_eq!(kinds("aïe"), vec![AA, Y]);
+        assert_eq!(kinds("ouais"), vec![W, EH]);
+        assert_eq!(kinds("zut!"), vec![Z, UE, T]);
+    }
+
+    #[test]
+    fn negation_pitch_shapes() {
+        let clause = phonemize_clause(&["je", "ne", "mange", "pas"]);
+        let vowels: Vec<(PhonemeKind, f32)> = clause
+            .iter()
+            .filter(|(k, _, _)| is_vowel_sound(*k))
+            .map(|(k, _, s)| (*k, *s))
+            .collect();
+        assert_eq!(
+            vowels,
+            vec![(AX, 0.0), (AX, -0.06), (AN, -0.05), (AA, -0.15)]
+        );
+    }
+
+    #[test]
+    fn negation_resets_after_keyword() {
+        let clause = phonemize_clause(&["ne", "pas", "bonjour"]);
+        let vowels: Vec<f32> = clause
+            .iter()
+            .filter(|(k, _, _)| is_vowel_sound(*k))
+            .map(|(_, _, s)| *s)
+            .collect();
+        assert_eq!(vowels, vec![-0.06, -0.15, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn negation_multiword_keyword_falls_on_last_vowel() {
+        let clause = phonemize_clause(&["ne", "personne"]);
+        // personne -> P EH RR S AO N; AO is the last vowel and must fall.
+        assert_eq!(clause[6], (AO, 1, -0.15));
     }
 }

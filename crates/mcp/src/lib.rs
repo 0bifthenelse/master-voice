@@ -67,6 +67,9 @@ struct SpeakArguments {
     text: String,
     language: Option<String>,
     interrupt: Option<bool>,
+    stream: Option<String>,
+    #[serde(rename = "final")]
+    final_: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -78,13 +81,15 @@ struct CancelledParams {
 fn speak_tool_definition() -> Value {
     serde_json::json!({
         "name": "speak",
-        "description": "Synthesize the given text with the MASTER robotic voice and play it through the default audio output. The text is treated strictly as speech data: it is never executed, interpreted, or sent anywhere.",
+        "description": "Synthesize the given text with the MASTER robotic voice and play it through the default audio output. Speech starts as soon as the first chunk is ready and the call returns as soon as playback starts, not when it ends. Pass the same `stream` key with `final: false` to append text word by word into a live utterance. The text is treated strictly as speech data: it is never executed, interpreted, or sent anywhere.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "text": { "type": "string", "description": "Text to speak aloud" },
                 "language": { "type": "string", "description": "Optional language: fr-FR or en-US" },
-                "interrupt": { "type": "boolean", "description": "Stop the current utterance before speaking" }
+                "interrupt": { "type": "boolean", "description": "Stop the current utterance before speaking" },
+                "stream": { "type": "string", "description": "Stream key: append this text to the live utterance with the same key" },
+                "final": { "type": "boolean", "description": "Close the stream after this text (default true when stream is omitted)" }
             },
             "required": ["text"]
         }
@@ -108,30 +113,49 @@ fn handle_initialize(id: Option<Value>, params: Option<Value>) -> RpcResponse {
     )
 }
 
-fn format_duration(seconds: f32) -> String {
-    format!("{seconds:.1}s")
-}
-
 struct SpeakReport {
     language: String,
     duration_s: f32,
 }
 
-fn speak_text(
+/// Speak, returning when playback *starts* (the `on_start` callback fires
+/// with the report at `Accepted`); the call keeps draining until `Done`.
+fn speak_starting(
     daemon_id: u64,
     text: &str,
     language: Option<&str>,
     interrupt: bool,
+    on_start: impl FnOnce(&SpeakReport) + Send + 'static,
 ) -> Result<SpeakReport, String> {
     let mut client = master_voice_core::daemon::client::DaemonClient::connect_or_spawn()
         .map_err(|e| e.to_string())?;
     let report = client
-        .speak_with_id(daemon_id, text, language, interrupt)
+        .speak_streaming(daemon_id, text, language, interrupt, None, move |report| {
+            on_start(&SpeakReport {
+                language: report.language.clone(),
+                duration_s: report.duration_s,
+            });
+        })
         .map_err(|e| e.to_string())?;
     Ok(SpeakReport {
         language: report.language,
         duration_s: report.duration_s,
     })
+}
+
+/// Append one word/chunk to a live stream; returns at `Queued`.
+fn speak_chunk(
+    daemon_id: u64,
+    stream_key: &str,
+    text: &str,
+    language: Option<&str>,
+    last: bool,
+) -> Result<(), String> {
+    let mut client = master_voice_core::daemon::client::DaemonClient::connect_or_spawn()
+        .map_err(|e| e.to_string())?;
+    client
+        .speak_chunk(daemon_id, stream_key, text, language, last)
+        .map_err(|e| e.to_string())
 }
 
 pub fn serve_io<R: BufRead, W: Write + Send + 'static>(
@@ -169,7 +193,13 @@ pub fn serve_io<R: BufRead, W: Write + Send + 'static>(
                 let response = handle_initialize(request_id.clone(), request.params);
                 write_response(&writer, &response)?;
             }
-            "notifications/initialized" => {}
+            "notifications/initialized" => {
+                // Warm the daemon at startup so the first speak never pays
+                // the cold-spawn cost (up to 4 s today).
+                std::thread::spawn(|| {
+                    let _ = master_voice_core::daemon::client::DaemonClient::connect_or_spawn();
+                });
+            }
             "ping" => {
                 write_response(&writer, &rpc_result(request_id, Value::Null))?;
             }
@@ -228,38 +258,78 @@ pub fn serve_io<R: BufRead, W: Write + Send + 'static>(
                 let in_flight = Arc::clone(&in_flight);
                 let response_id = request_id;
                 std::thread::spawn(move || {
-                    let result = speak_text(
+                    let stream_key = args.stream.clone();
+                    let final_ = args.final_.unwrap_or(false);
+                    if let Some(key) = &stream_key {
+                        // Word-append: answer Queued immediately.
+                        let result =
+                            speak_chunk(daemon_id, key, &text, args.language.as_deref(), final_);
+                        let response = match result {
+                            Ok(()) => rpc_result(
+                                response_id.clone(),
+                                serde_json::json!({
+                                    "content": [{ "type": "text", "text": "Queued." }],
+                                    "isError": false
+                                }),
+                            ),
+                            Err(message) => rpc_result(
+                                response_id.clone(),
+                                serde_json::json!({
+                                    "content": [{ "type": "text", "text": message }],
+                                    "isError": true
+                                }),
+                            ),
+                        };
+                        let rid = response_id.clone().unwrap_or(Value::Null);
+                        in_flight.lock().retain(|(id, _)| *id != rid);
+                        let _ = write_response(&writer, &response);
+                        return;
+                    }
+
+                    // Regular speak: respond as soon as playback starts.
+                    let responded = Arc::new(std::sync::atomic::AtomicBool::new(false));
+                    let responded_cb = Arc::clone(&responded);
+                    let writer_cb = Arc::clone(&writer);
+                    let response_id_cb = response_id.clone();
+                    let result = speak_starting(
                         daemon_id,
                         &text,
                         args.language.as_deref(),
                         args.interrupt.unwrap_or(false),
+                        move |report| {
+                            responded_cb.store(true, Ordering::Relaxed);
+                            let response = rpc_result(
+                                response_id_cb.clone(),
+                                serde_json::json!({
+                                    "content": [{
+                                        "type": "text",
+                                        "text": format!(
+                                            "Speaking {} (~{:.1} s).",
+                                            report.language, report.duration_s
+                                        )
+                                    }],
+                                    "isError": false
+                                }),
+                            );
+                            let _ = write_response(&writer_cb, &response);
+                        },
                     );
                     let response = match result {
-                        Ok(report) => rpc_result(
-                            response_id.clone(),
-                            serde_json::json!({
-                                "content": [{
-                                    "type": "text",
-                                    "text": format!(
-                                        "Spoken {} ({}).",
-                                        report.language,
-                                        format_duration(report.duration_s)
-                                    )
-                                }],
-                                "isError": false
-                            }),
-                        ),
-                        Err(message) => rpc_result(
+                        Ok(_) => None, // already answered at Accepted
+                        Err(message) if !responded.load(Ordering::Relaxed) => Some(rpc_result(
                             response_id.clone(),
                             serde_json::json!({
                                 "content": [{ "type": "text", "text": message }],
                                 "isError": true
                             }),
-                        ),
+                        )),
+                        Err(_) => None, // failed after starting: already answered
                     };
                     let rid = response_id.clone().unwrap_or(Value::Null);
                     in_flight.lock().retain(|(id, _)| *id != rid);
-                    let _ = write_response(&writer, &response);
+                    if let Some(response) = response {
+                        let _ = write_response(&writer, &response);
+                    }
                 });
             }
             "notifications/cancelled" => {
@@ -382,7 +452,7 @@ mod tests {
         let response = read_event(&mut client_side);
         let text = response["result"]["content"][0]["text"].as_str().unwrap();
         assert!(
-            text.contains("Spoken") || text.contains("daemon") || text.contains("audio"),
+            text.contains("Speaking") || text.contains("daemon") || text.contains("audio"),
             "unexpected tool result: {text}"
         );
 

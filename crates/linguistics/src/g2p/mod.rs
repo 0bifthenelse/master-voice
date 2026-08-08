@@ -18,10 +18,11 @@ pub fn tokenize(text: &str) -> Vec<Token> {
             .chars()
             .all(|c| matches!(c, '.' | ',' | '!' | '?' | ';' | ':'));
         if all_punct {
-            let boundary = if matches!(piece.chars().next(), Some('.') | Some('!') | Some('?')) {
-                Boundary::Sentence
-            } else {
-                Boundary::Clause
+            let boundary = match piece.chars().next() {
+                Some('?') => Boundary::Question,
+                Some('!') => Boundary::Exclaim,
+                Some('.') => Boundary::Sentence,
+                _ => Boundary::Clause,
             };
             out.push(Token::Boundary(boundary));
         } else {
@@ -42,8 +43,72 @@ fn apply_word_override(word: &str, overrides: &Overrides) -> Option<Vec<(Phoneme
     )
 }
 
+fn emit_phones(out: &mut Vec<Phoneme>, phones: impl IntoIterator<Item = (PhonemeKind, u8, f32)>) {
+    let mut phones: Vec<(PhonemeKind, u8, f32)> = phones.into_iter().collect();
+    let word_len = phones.len();
+    for (i, (kind, stress, shift)) in phones.drain(..).enumerate() {
+        let mut phoneme = Phoneme::new(kind);
+        phoneme.stress = match stress {
+            1 => Stress::Primary,
+            2 => Stress::Secondary,
+            _ => Stress::None,
+        };
+        phoneme.pitch_shift = shift;
+        if i + 1 == word_len {
+            phoneme.boundary_after = Boundary::Word;
+        }
+        out.push(phoneme);
+    }
+}
+
+fn flush_fr_clause(out: &mut Vec<Phoneme>, clause: &mut Vec<String>) {
+    if clause.is_empty() {
+        return;
+    }
+    let words: Vec<&str> = clause.iter().map(String::as_str).collect();
+    emit_phones(out, fr::phonemize_clause(&words));
+    clause.clear();
+}
+
 pub fn phonemize_tokens(tokens: &[Token], lang: Language, overrides: &Overrides) -> Vec<Phoneme> {
     let mut out: Vec<Phoneme> = Vec::new();
+    if lang == Language::French {
+        let mut clause: Vec<String> = Vec::new();
+        for token in tokens {
+            match token {
+                Token::Boundary(boundary) => {
+                    flush_fr_clause(&mut out, &mut clause);
+                    if let Some(last) = out.last_mut() {
+                        last.boundary_after = *boundary;
+                    }
+                }
+                Token::Word(word) => {
+                    if word.is_empty() {
+                        continue;
+                    }
+                    if let Some(override_phones) = apply_word_override(word, overrides) {
+                        flush_fr_clause(&mut out, &mut clause);
+                        emit_phones(
+                            &mut out,
+                            override_phones
+                                .into_iter()
+                                .map(|(k, s)| (k, s, 0.0))
+                                .collect::<Vec<_>>(),
+                        );
+                    } else {
+                        clause.push(word.to_string());
+                    }
+                }
+            }
+        }
+        flush_fr_clause(&mut out, &mut clause);
+        if let Some(last) = out.last_mut() {
+            if last.boundary_after == Boundary::None {
+                last.boundary_after = Boundary::Sentence;
+            }
+        }
+        return out;
+    }
     for (idx, token) in tokens.iter().enumerate() {
         match token {
             Token::Boundary(boundary) => {
@@ -63,24 +128,9 @@ pub fn phonemize_tokens(tokens: &[Token], lang: Language, overrides: &Overrides)
                     if let Some(override_phones) = apply_word_override(word, overrides) {
                         override_phones
                     } else {
-                        match lang {
-                            Language::English => en::phonemize_word(word, next_first),
-                            Language::French => fr::phonemize_word(word),
-                        }
+                        en::phonemize_word(word, next_first)
                     };
-                let word_len = phones.len();
-                for (i, (kind, stress)) in phones.into_iter().enumerate() {
-                    let mut phoneme = Phoneme::new(kind);
-                    phoneme.stress = match stress {
-                        1 => Stress::Primary,
-                        2 => Stress::Secondary,
-                        _ => Stress::None,
-                    };
-                    if i + 1 == word_len {
-                        phoneme.boundary_after = Boundary::Word;
-                    }
-                    out.push(phoneme);
-                }
+                emit_phones(&mut out, phones.into_iter().map(|(k, s)| (k, s, 0.0)));
             }
         }
     }
@@ -132,7 +182,32 @@ mod tests {
         let phones = phonemize_tokens(&tokens, Language::French, &overrides);
         assert_eq!(
             phones.iter().map(|p| p.kind).collect::<Vec<_>>(),
-            vec![B, ON, Z, UW, RR]
+            vec![B, ON, ZH, UW, RR]
+        );
+    }
+
+    #[test]
+    fn exclaim_token_boundary() {
+        let tokens = tokenize("wow !");
+        assert!(matches!(tokens[1], Token::Boundary(Boundary::Exclaim)));
+    }
+
+    #[test]
+    fn exclaim_sets_final_boundary() {
+        let overrides = Overrides::default();
+        let tokens = tokenize("bravo !");
+        let phones = phonemize_tokens(&tokens, Language::French, &overrides);
+        assert_eq!(phones.last().unwrap().boundary_after, Boundary::Exclaim);
+    }
+
+    #[test]
+    fn french_interjection_trailing_bang() {
+        let overrides = Overrides::default();
+        let tokens = tokenize("zut!");
+        let phones = phonemize_tokens(&tokens, Language::French, &overrides);
+        assert_eq!(
+            phones.iter().map(|p| p.kind).collect::<Vec<_>>(),
+            vec![Z, UE, T]
         );
     }
 }

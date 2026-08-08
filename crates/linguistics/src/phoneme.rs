@@ -70,13 +70,15 @@ pub enum Boundary {
     Clause,
     Sentence,
     Question,
+    Exclaim,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Phoneme {
     pub kind: PhonemeKind,
     pub stress: Stress,
     pub boundary_after: Boundary,
+    pub pitch_shift: f32,
 }
 
 impl Phoneme {
@@ -85,6 +87,7 @@ impl Phoneme {
             kind,
             stress: Stress::None,
             boundary_after: Boundary::None,
+            pitch_shift: 0.0,
         }
     }
 

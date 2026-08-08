@@ -1,9 +1,11 @@
+pub mod character;
 pub mod dsp;
+pub mod frame;
 pub mod klatt;
 pub mod params;
 pub mod prosody;
 
-pub use prosody::SynthOptions;
+pub use prosody::{ChunkPos, SynthOptions};
 
 use master_voice_linguistics::phoneme::Phoneme;
 
@@ -13,9 +15,18 @@ pub struct AudioBuffer {
 }
 
 pub fn synthesize(phonemes: &[Phoneme], opts: &SynthOptions) -> AudioBuffer {
-    let prosody = prosody::build_prosody(phonemes, opts);
-    let mut samples = klatt::render_segments(&prosody.segments);
-    dsp::robotic_chain(&mut samples, opts.robotic_depth);
+    let frames = prosody::build_frames(phonemes, opts);
+    let mut samples = klatt::render_frames(&frames, opts.robotic_depth);
+    let mut post = dsp::PostState::default();
+    dsp::post_chain(
+        &mut samples,
+        opts.robotic_depth,
+        &mut post,
+        ChunkPos {
+            first: true,
+            last: true,
+        },
+    );
     dsp::apply_volume(&mut samples, opts.volume);
     AudioBuffer {
         samples,
@@ -89,5 +100,27 @@ mod tests {
         let phonemes = [Phoneme::new(PhonemeKind::B), Phoneme::new(PhonemeKind::ON)];
         let buffer = synthesize(&phonemes, &SynthOptions::default());
         assert!(buffer.samples.iter().all(|s| s.is_finite()));
+    }
+
+    #[test]
+    fn robotic_depth_zero_is_plain() {
+        let phonemes = [Phoneme::new(PhonemeKind::AA)];
+        let plain = synthesize(
+            &phonemes,
+            &SynthOptions {
+                robotic_depth: 0.0,
+                ..SynthOptions::default()
+            },
+        )
+        .samples;
+        let character = synthesize(
+            &phonemes,
+            &SynthOptions {
+                robotic_depth: 1.0,
+                ..SynthOptions::default()
+            },
+        )
+        .samples;
+        assert_ne!(plain, character);
     }
 }

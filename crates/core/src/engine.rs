@@ -34,7 +34,7 @@ impl EngineSettings {
             rate: config.rate.unwrap_or(1.0).clamp(0.5, 2.0),
             pitch: config.pitch.unwrap_or(1.0).clamp(0.5, 1.5),
             volume: config.volume.unwrap_or(1.0).clamp(0.0, 2.0),
-            robotic_depth: config.robotic_depth.unwrap_or(0.6).clamp(0.0, 1.0),
+            robotic_depth: config.robotic_depth.unwrap_or(0.55).clamp(0.0, 1.0),
         }
     }
 
@@ -72,6 +72,57 @@ pub fn synthesize_text(
     Ok((utterance.language, buffer, elapsed))
 }
 
+/// Chunked synthesis: the renderer and post-chain state persist across
+/// chunks, so consecutive chunks concatenate sample-continuously (Step 7b).
+pub struct StreamSynth {
+    renderer: master_voice_synth::klatt::Renderer,
+    post: master_voice_synth::dsp::PostState,
+    opts: SynthOptions,
+    first: bool,
+}
+
+impl StreamSynth {
+    pub fn new(settings: &EngineSettings) -> Self {
+        let opts = settings.synth_options();
+        Self {
+            renderer: master_voice_synth::klatt::Renderer::new(opts.robotic_depth),
+            post: master_voice_synth::dsp::PostState::default(),
+            opts,
+            first: true,
+        }
+    }
+
+    /// Phonemize + render one chunk of text. `last` marks the final chunk
+    /// of the utterance (drives fades and the prosody finality flags).
+    pub fn chunk(
+        &mut self,
+        text: &str,
+        language: Option<Language>,
+        overrides: &Overrides,
+        last: bool,
+    ) -> Result<(Language, Vec<f32>, f64), Error> {
+        let started = std::time::Instant::now();
+        let utterance = master_voice_linguistics::phonemize(text, language, overrides)?;
+        let pos = master_voice_synth::ChunkPos {
+            first: self.first,
+            last,
+        };
+        let frames =
+            master_voice_synth::prosody::build_frames_chunk(&utterance.phonemes, &self.opts, pos);
+        let mut samples = self.renderer.render(&frames);
+        master_voice_synth::dsp::post_chain(
+            &mut samples,
+            self.opts.robotic_depth,
+            &mut self.post,
+            pos,
+        );
+        master_voice_synth::dsp::apply_volume(&mut samples, self.opts.volume);
+        self.first = false;
+        let elapsed = started.elapsed().as_secs_f64() * 1000.0;
+        Ok((utterance.language, samples, elapsed))
+    }
+}
+
 pub fn speak(
     request: &SpeakRequest,
     settings: &EngineSettings,
@@ -99,7 +150,7 @@ mod tests {
     fn settings_from_default_config() {
         let settings = EngineSettings::from_config(&Config::default());
         assert_eq!(settings.rate, 1.0);
-        assert_eq!(settings.robotic_depth, 0.6);
+        assert_eq!(settings.robotic_depth, 0.55);
         assert_eq!(settings.language, None);
     }
 

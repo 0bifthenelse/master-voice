@@ -16,6 +16,8 @@ pub enum SpeakStatus {
     Interrupted,
 }
 
+type AcceptedCallback = Box<dyn FnOnce(&SpeakReport) + Send>;
+
 pub struct SpeakReport {
     pub status: SpeakStatus,
     pub duration_s: f32,
@@ -66,21 +68,101 @@ impl DaemonClient {
         language: Option<&str>,
         interrupt: bool,
     ) -> Result<SpeakReport, Error> {
-        self.speak_with_id(1, text, language, interrupt)
+        self.speak_with_id(1, text, language, interrupt, None)
     }
 
+    /// Speak and block until playback ends (CLI path).
     pub fn speak_with_id(
         &mut self,
         id: u64,
         text: &str,
         language: Option<&str>,
         interrupt: bool,
+        robotic: Option<f32>,
     ) -> Result<SpeakReport, Error> {
+        let mut report = SpeakReport::default();
+        self.speak_impl(
+            id,
+            text,
+            language,
+            interrupt,
+            robotic,
+            None,
+            &mut report,
+            None,
+        )?;
+        Ok(report)
+    }
+
+    /// Speak and call `on_accepted` as soon as the daemon accepts the
+    /// utterance (speech has started), then keep draining to `Done`.
+    pub fn speak_streaming(
+        &mut self,
+        id: u64,
+        text: &str,
+        language: Option<&str>,
+        interrupt: bool,
+        robotic: Option<f32>,
+        on_accepted: impl FnOnce(&SpeakReport) + Send + 'static,
+    ) -> Result<SpeakReport, Error> {
+        let mut report = SpeakReport::default();
+        self.speak_impl(
+            id,
+            text,
+            language,
+            interrupt,
+            robotic,
+            None,
+            &mut report,
+            Some(Box::new(on_accepted)),
+        )?;
+        Ok(report)
+    }
+
+    /// Append one word/chunk to the live stream `stream_key`; returns as
+    /// soon as the daemon queues it (`Event::Queued`).
+    pub fn speak_chunk(
+        &mut self,
+        id: u64,
+        stream_key: &str,
+        text: &str,
+        language: Option<&str>,
+        last: bool,
+    ) -> Result<(), Error> {
+        let mut report = SpeakReport::default();
+        self.speak_impl(
+            id,
+            text,
+            language,
+            false,
+            None,
+            Some((stream_key, last)),
+            &mut report,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn speak_impl(
+        &mut self,
+        id: u64,
+        text: &str,
+        language: Option<&str>,
+        interrupt: bool,
+        robotic: Option<f32>,
+        stream: Option<(&str, bool)>,
+        report: &mut SpeakReport,
+        on_accepted: Option<AcceptedCallback>,
+    ) -> Result<(), Error> {
+        let mut on_accepted = on_accepted;
         let request = Request::Speak {
             id,
             text: text.to_string(),
             language: language.map(|l| l.to_string()),
             interrupt,
+            robotic,
+            stream: stream.map(|(key, _)| key.to_string()),
+            last: stream.map(|(_, last)| last),
         };
         let line = serde_json::to_string(&request)
             .map_err(|e| Error::Daemon(format!("serialize: {e}")))?;
@@ -93,13 +175,6 @@ impl DaemonClient {
         let mut reader = BufReader::new(self.stream.try_clone().map_err(Error::from)?);
         let mut buffer = String::new();
         let sent_at = std::time::Instant::now();
-        let mut report = SpeakReport {
-            status: SpeakStatus::Played,
-            duration_s: 0.0,
-            synth_ms: 0.0,
-            language: String::new(),
-            accepted_ms: 0.0,
-        };
         loop {
             buffer.clear();
             let n = reader
@@ -119,7 +194,11 @@ impl DaemonClient {
                     report.duration_s = duration_s;
                     report.synth_ms = synth_ms;
                     report.accepted_ms = sent_at.elapsed().as_secs_f64() * 1000.0;
+                    if let Some(cb) = on_accepted.take() {
+                        cb(report);
+                    }
                 }
+                Ok(Event::Queued { .. }) => return Ok(()),
                 Ok(Event::Done { status, error, .. }) => {
                     if let Some(message) = error {
                         return Err(Error::Audio(message));
@@ -129,7 +208,7 @@ impl DaemonClient {
                     } else {
                         SpeakStatus::Played
                     };
-                    return Ok(report);
+                    return Ok(());
                 }
                 Ok(Event::Error { message, code, .. }) => {
                     let error = match code {
@@ -198,6 +277,18 @@ impl DaemonClient {
         self.stream.write_all(b"\n").map_err(Error::from)?;
         self.stream.flush().map_err(Error::from)?;
         Ok(())
+    }
+}
+
+impl Default for SpeakReport {
+    fn default() -> Self {
+        Self {
+            status: SpeakStatus::Played,
+            duration_s: 0.0,
+            synth_ms: 0.0,
+            language: String::new(),
+            accepted_ms: 0.0,
+        }
     }
 }
 

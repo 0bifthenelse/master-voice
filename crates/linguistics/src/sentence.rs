@@ -41,15 +41,19 @@ pub fn split_sentences(input: &str) -> Vec<Sentence> {
                     break;
                 }
             }
+            let boundary = match c {
+                '?' if chars.peek() == Some(&'!') => {
+                    current.push('!');
+                    chars.next();
+                    Boundary::Exclaim
+                }
+                '?' => Boundary::Question,
+                '!' => Boundary::Exclaim,
+                '.' => Boundary::Sentence,
+                _ => Boundary::Clause,
+            };
             let text = current.trim().to_string();
             if !text.is_empty() {
-                let boundary = if c == '?' {
-                    Boundary::Question
-                } else if matches!(c, '.' | '!') {
-                    Boundary::Sentence
-                } else {
-                    Boundary::Clause
-                };
                 out.push(Sentence { text, boundary });
             }
             while let Some(&next) = chars.peek() {
@@ -128,5 +132,22 @@ mod tests {
         let sentences = split_sentences("Mr. Smith arrives.");
         assert_eq!(sentences[0].text, "Mr.");
         assert_eq!(sentences[1].text, "Smith arrives.");
+    }
+
+    #[test]
+    fn exclamation_is_exclaim_boundary() {
+        let sentences = split_sentences("Stop! Listen.");
+        assert_eq!(sentences.len(), 2);
+        assert_eq!(sentences[0].boundary, Boundary::Exclaim);
+        assert_eq!(sentences[1].boundary, Boundary::Sentence);
+    }
+
+    #[test]
+    fn question_exclaim_collapses_to_exclaim() {
+        let sentences = split_sentences("Really?! Yes.");
+        assert_eq!(sentences.len(), 2);
+        assert_eq!(sentences[0].text, "Really?!");
+        assert_eq!(sentences[0].boundary, Boundary::Exclaim);
+        assert_eq!(sentences[1].boundary, Boundary::Sentence);
     }
 }

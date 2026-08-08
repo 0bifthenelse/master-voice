@@ -7,6 +7,8 @@ use master_voice_linguistics::lang::Language;
 use std::io::IsTerminal;
 use std::time::Duration;
 
+mod wav;
+
 #[derive(Parser)]
 #[command(
     name = "master-voice",
@@ -30,6 +32,16 @@ struct Cli {
     /// Stop the previous utterance before speaking this one
     #[arg(long)]
     interrupt: bool,
+
+    /// Character amount 0.0-1.0 for this invocation (0.0 = plain speech,
+    /// 1.0 = full replicant); overrides config robotic_depth
+    #[arg(long, value_name = "0.0-1.0")]
+    robotic: Option<f32>,
+
+    /// Write 16-bit PCM WAV to PATH instead of playing (no audio device
+    /// touched)
+    #[arg(long, value_name = "PATH")]
+    output_wav: Option<std::path::PathBuf>,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -62,7 +74,13 @@ fn init_tracing(verbose: bool) {
         .try_init();
 }
 
-fn speak(text: &str, mut language: Option<&str>, interrupt: bool) -> Result<i32, Error> {
+fn speak(
+    text: &str,
+    mut language: Option<&str>,
+    interrupt: bool,
+    robotic: Option<f32>,
+    output_wav: Option<&std::path::Path>,
+) -> Result<i32, Error> {
     if text.trim().is_empty() {
         return Err(Error::Language("no speakable text".to_string()));
     }
@@ -73,8 +91,33 @@ fn speak(text: &str, mut language: Option<&str>, interrupt: bool) -> Result<i32,
             return Err(Error::Language(format!("unsupported language {code:?}")));
         }
     }
+    if let Some(path) = output_wav {
+        // Headless render: in-process synthesis, no audio device.
+        let config = master_voice_core::config::load_config().map_err(Error::Config)?;
+        let mut settings = EngineSettings::from_config(&config);
+        if let Some(v) = robotic {
+            settings.robotic_depth = v.clamp(0.0, 1.0);
+        }
+        let overrides = engine::overrides_from_config(&config);
+        let (language_used, buffer, _synth_ms) = engine::synthesize_text(
+            text,
+            language.and_then(Language::from_code),
+            &settings,
+            &overrides,
+        )?;
+        wav::write_wav(path, &buffer.samples, buffer.sample_rate)
+            .map_err(|e| Error::Usage(format!("cannot write {path:?}: {e}")))?;
+        println!(
+            "wrote {} ({} samples, {:.2} s, {})",
+            path.display(),
+            buffer.samples.len(),
+            buffer.samples.len() as f32 / buffer.sample_rate as f32,
+            language_used.code()
+        );
+        return Ok(0);
+    }
     let mut client = DaemonClient::connect_or_spawn()?;
-    let report = client.speak(text, language, interrupt)?;
+    let report = client.speak_with_id(1, text, language, interrupt, robotic)?;
     tracing::debug!(
         "spoke {} for {:.1}s ({}) accepted={:.1}ms synth={:.1}ms",
         report.language,
@@ -249,13 +292,25 @@ fn run(cli: Cli) -> Result<i32, Error> {
 
     if !cli.text.is_empty() {
         let text = cli.text.join(" ");
-        return speak(&text, cli.language.as_deref(), cli.interrupt);
+        return speak(
+            &text,
+            cli.language.as_deref(),
+            cli.interrupt,
+            cli.robotic,
+            cli.output_wav.as_deref(),
+        );
     }
 
     let stdin = std::io::stdin();
     if !stdin.is_terminal() {
         let text = read_stdin()?;
-        return speak(&text, cli.language.as_deref(), cli.interrupt);
+        return speak(
+            &text,
+            cli.language.as_deref(),
+            cli.interrupt,
+            cli.robotic,
+            cli.output_wav.as_deref(),
+        );
     }
 
     print_usage();

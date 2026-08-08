@@ -31,9 +31,9 @@ pub fn phonemize(
     let opts = normalize::NormalizeOptions::default();
     let sentences = sentence::split_sentences(text);
     let mut all: Vec<Phoneme> = Vec::new();
-    let mut lang_used = language.unwrap_or(Language::English);
+    let mut lang_used = language.unwrap_or(Language::French);
     for s in &sentences {
-        let lang = language.unwrap_or_else(|| lang::detect(&s.text).unwrap_or(Language::English));
+        let lang = language.unwrap_or_else(|| lang::detect(&s.text).unwrap_or(Language::French));
         lang_used = lang;
         let normalized = normalize::normalize_sentence(&s.text, lang, &opts);
         let tokens = g2p::tokenize(&normalized);
@@ -76,7 +76,7 @@ mod tests {
                 Some(Language::French)
             ),
             vec![
-                B, ON, Z, UW, RR, Z, AX, S, Y, IY, L, AX, S, IY, S, T, EH, M, D, AX, S, IY, N, T,
+                B, ON, ZH, UW, RR, ZH, AX, S, Y, IY, L, AX, S, IY, S, T, EH, M, D, AX, S, IY, N, T,
                 EH, Z, V, AO, K, AA, L, M, AA, S, T, EH, RR
             ]
         );
@@ -89,7 +89,7 @@ mod tests {
                 "Aujourd'hui, nous sommes à Auch, dans le Gers.",
                 Some(Language::French)
             ),
-            vec![OW, Z, UW, RR, D, UE, IY, N, UW, S, AO, M, AA, OW, SH, D, AN, L, AX, Z, EH, RR]
+            vec![OW, ZH, UW, RR, D, UE, IY, N, UW, S, AO, M, AA, OW, SH, D, AN, L, AX, ZH, EH, RR]
         );
     }
 
@@ -101,7 +101,7 @@ mod tests {
                 Some(Language::French)
             ),
             vec![
-                L, EN, T, EH, L, IY, Z, AN, S, AA, RR, T, IY, F, IY, S, Y, EH, L, F, ON, K, S, Y,
+                L, EN, T, EH, L, IY, ZH, AN, S, AA, RR, T, IY, F, IY, S, Y, EH, L, F, ON, K, S, Y,
                 ON, N, K, AO, RR, EH, K, T, AX, M, AN
             ]
         );
@@ -139,8 +139,8 @@ mod tests {
         assert_eq!(
             phonemes("GPU, CPU, Rust, NVIDIA et WebGPU.", Some(Language::French)),
             vec![
-                Z, EY, P, EY, UE, S, EY, P, EY, UE, RR, UE, S, T, N, V, IY, D, Y, AA, EY, W, EH, B,
-                Z, EY, P, EY, UE
+                ZH, EY, P, EY, UE, S, EY, P, EY, UE, RR, UE, S, T, N, V, IY, D, Y, AA, EY, W, EH,
+                B, ZH, EY, P, EY, UE
             ]
         );
     }
@@ -224,5 +224,57 @@ mod tests {
     fn empty_input_errors() {
         assert!(phonemize("   ", None, &overrides::Overrides::default()).is_err());
         assert!(phonemize("", None, &overrides::Overrides::default()).is_err());
+    }
+
+    #[test]
+    fn exclaim_boundary_end_to_end() {
+        use phoneme::Boundary;
+        let utterance = phonemize(
+            "Bravo!",
+            Some(Language::French),
+            &overrides::Overrides::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            utterance.phonemes.last().unwrap().boundary_after,
+            Boundary::Exclaim
+        );
+        assert_eq!(
+            utterance
+                .phonemes
+                .iter()
+                .map(|p| p.kind)
+                .collect::<Vec<_>>(),
+            vec![B, RR, AA, V, OW]
+        );
+    }
+
+    #[test]
+    fn negation_and_exclaim_integrated() {
+        use phoneme::Boundary;
+        let utterance = phonemize(
+            "Ne mange pas !",
+            Some(Language::French),
+            &overrides::Overrides::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            utterance.phonemes.last().unwrap().boundary_after,
+            Boundary::Exclaim
+        );
+        let pas: Vec<f32> = utterance
+            .phonemes
+            .iter()
+            .filter(|p| p.kind == PhonemeKind::AA)
+            .map(|p| p.pitch_shift)
+            .collect();
+        assert_eq!(pas, vec![-0.15]);
+        let ne: Vec<f32> = utterance
+            .phonemes
+            .iter()
+            .filter(|p| p.kind == PhonemeKind::AX)
+            .map(|p| p.pitch_shift)
+            .collect();
+        assert_eq!(ne, vec![-0.06]);
     }
 }

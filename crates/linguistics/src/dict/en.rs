@@ -251,6 +251,37 @@ word W ER1 D
 nurse N ER1 S
 large L AA1 R JH
 care K EH1 R
+shall SH AE1 L
+might M AY1 T
+must M AH1 S T
+up AH1 P
+under AH1 N D ER0
+many M EH1 N IY0
+even IY1 V AX0 N
+still S T IH1 L
+ok OW0 K EY1
+please P L IY1 Z
+thanks TH AE1 NG K S
+sorry S AA1 R IY0
+hi HH AY1
+great G R EY1 T
+nice N AY1 S
+wrong R AO1 NG
+ah AA1
+eh EH1
+wow W AW1
+oops UW1 P S
+ouch AW1 CH
+yay Y EY1
+whoa W OW1
+uh AH1
+um AH1 M
+uh-huh AH1 HH AH2
+uh-uh AH1 AH2
+hmm HH M
+phew F Y UW1
+ahem AH0 HH EH1 M
+oof UW1 F
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {

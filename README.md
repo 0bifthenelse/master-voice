@@ -6,8 +6,9 @@ system packages). One engine behind a CLI, an MCP server, and OMP automatic
 speech.
 
 Supported languages: **French (fr-FR, first-class)** and **English (en-US)**,
-with automatic per-sentence language routing. Spanish/German/Italian are not
-implemented; the engine architecture accepts new languages as new G2P modules.
+with automatic per-sentence language routing; when routing is inconclusive
+the fallback language is French. Spanish/German/Italian are not implemented;
+the engine architecture accepts new languages as new G2P modules.
 
 ## Build
 
@@ -36,6 +37,8 @@ echo "Speech through standard input." | master-voice # stdin when piped
 master-voice --language fr-FR "Bonjour à tous."     # language override
 master-voice --language en-US "System online."
 master-voice --interrupt "Stop the previous utterance and speak this."
+master-voice --robotic 0.9 "Full replicant mode."   # per-call character amount
+master-voice --output-wav /tmp/out.wav "Render only" # 16-bit WAV, no device
 master-voice languages   # fr-FR / en-US / auto
 master-voice devices     # enumerate audio outputs
 master-voice doctor      # diagnostics (config, daemon, device, engine, espeak-ng)
@@ -60,7 +63,7 @@ language = "auto"            # "fr-FR" | "en-US" | "auto"
 rate = 1.0                   # speech rate multiplier
 pitch = 1.0                  # pitch multiplier
 volume = 1.0                 # output volume multiplier
-robotic_depth = 0.6          # 0.0 = softer, 1.0 = more robotic
+robotic_depth = 0.55         # 0.0 = plain speech, 1.0 = full replicant
 device = "default"           # optional output device name (see `master-voice devices`)
 queue_limit = 16             # bounded playback FIFO
 daemon_idle_timeout_secs = 300
@@ -80,8 +83,15 @@ The playback daemon socket lives at `$XDG_RUNTIME_DIR/master-voice.sock`
 `master-voice mcp` exposes one tool:
 
 ```
-speak(text: string, language?: string, interrupt?: boolean)
+speak(text: string, language?: string, interrupt?: boolean,
+      stream?: string, final?: boolean)
 ```
+
+Speech starts as soon as the first chunk is synthesized; the call returns as
+soon as playback starts, not when it ends (first response ≈ 5 ms, warm ≈ 1 ms
+for 240 words). Pass the same `stream` key with `final: false` to append text
+word by word into a live, gapless utterance; `final: true` closes the stream.
+The daemon is warmed at `notifications/initialized`.
 
 Stdio, protocol 2025-03-26; stdout carries protocol frames only; logs go to
 stderr; `shutdown` exits cleanly, cancelling outstanding speech.
@@ -120,9 +130,12 @@ cargo test --workspace
 cargo build --workspace --release
 ```
 
-110 tests: G2P corpora (fr/en), normalization, numbers, sentence boundaries,
-overrides, synthesis determinism, queue semantics, shell-safety battery
-(no input text can execute), MCP protocol end-to-end, CLI behaviors.
+150 tests: G2P corpora (fr/en), interjections, exclamation boundaries,
+discontiguous French negation pitch shaping, normalization, numbers,
+sentence boundaries, overrides, synthesis determinism, resonator state
+(V1), chunked render bit-identity (V4), formant spectrum (V2/V3), queue
+semantics, stream chunking, shell-safety battery (no input text can
+execute), MCP protocol end-to-end, CLI behaviors.
 
 ## License
 

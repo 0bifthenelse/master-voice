@@ -113,6 +113,34 @@ impl PlaybackQueue {
         }
     }
 
+    /// Interrupt the current item and every queued item of this utterance
+    /// (an utterance is many queue items once streaming). Other utterances
+    /// stay queued; their FIFO position is preserved.
+    pub fn interrupt_utterance(&mut self, id: u64) {
+        if self.current.as_ref().is_some_and(|q| q.id == id) {
+            if let Some(current) = self.current.take() {
+                if let Some(done) = current.done {
+                    let _ = done.send(PlaybackOutcome::Interrupted);
+                }
+            }
+            self.pos = 0;
+        }
+        let mut kept = VecDeque::new();
+        for mut queued in self.queue.drain(..) {
+            if queued.id == id {
+                if let Some(done) = queued.done.take() {
+                    let _ = done.send(PlaybackOutcome::Interrupted);
+                }
+            } else {
+                kept.push_back(queued);
+            }
+        }
+        self.queue = kept;
+        if self.current.is_none() {
+            self.advance();
+        }
+    }
+
     pub fn next_frame(&mut self) -> Option<f32> {
         loop {
             if let Some(current) = &mut self.current {
@@ -190,6 +218,10 @@ impl PlaybackController {
         self.queue.lock().interrupt_current();
     }
 
+    pub fn interrupt_utterance(&self, id: u64) {
+        self.queue.lock().interrupt_utterance(id);
+    }
+
     pub fn is_idle(&self) -> bool {
         self.queue.lock().is_idle()
     }
@@ -212,6 +244,12 @@ enum Command {
         reply: std::sync::mpsc::SyncSender<Option<(u64, u64)>>,
     },
     InterruptCurrent,
+    InterruptUtterance {
+        id: u64,
+    },
+    QueueLen {
+        reply: std::sync::mpsc::SyncSender<usize>,
+    },
     Stop,
 }
 
@@ -257,6 +295,15 @@ impl PlaybackThread {
                             if let Some(controller) = &controller {
                                 controller.interrupt_current();
                             }
+                        }
+                        Command::InterruptUtterance { id } => {
+                            if let Some(controller) = &controller {
+                                controller.interrupt_utterance(id);
+                            }
+                        }
+                        Command::QueueLen { reply } => {
+                            let len = controller.as_ref().map(|c| c.queue_len()).unwrap_or(0);
+                            let _ = reply.send(len);
                         }
                         Command::Stop => break,
                     }
@@ -315,6 +362,19 @@ impl PlaybackThread {
 
     pub fn interrupt_current(&self) {
         let _ = self.tx.send(Command::InterruptCurrent);
+    }
+
+    pub fn interrupt_utterance(&self, id: u64) {
+        let _ = self.tx.send(Command::InterruptUtterance { id });
+    }
+
+    /// Number of items in the queue (current + queued).
+    pub fn queue_len(&self) -> usize {
+        let (reply_tx, reply_rx) = std::sync::mpsc::sync_channel(1);
+        if self.tx.send(Command::QueueLen { reply: reply_tx }).is_err() {
+            return 0;
+        }
+        reply_rx.recv().unwrap_or(0)
     }
 
     pub fn stop(&mut self) {
@@ -389,6 +449,23 @@ mod tests {
             queue.push(3, 1, vec![3.0; 10], false),
             Err(AudioError::QueueFull)
         ));
+    }
+
+    #[test]
+    fn interrupt_utterance_kills_only_its_own_items() {
+        let mut queue = PlaybackQueue::new(8);
+        let a = queue.push(7, 1, vec![1.0; 10], false).unwrap();
+        let b = queue.push(7, 1, vec![2.0; 10], false).unwrap();
+        let c = queue.push(7, 1, vec![3.0; 10], false).unwrap();
+        let d = queue.push(8, 1, vec![4.0; 10], false).unwrap();
+        queue.interrupt_utterance(7);
+        assert_eq!(wait_outcome(a), PlaybackOutcome::Interrupted);
+        assert_eq!(wait_outcome(b), PlaybackOutcome::Interrupted);
+        assert_eq!(wait_outcome(c), PlaybackOutcome::Interrupted);
+        assert_eq!(queue.len(), 1, "only the id-8 item survives");
+        assert_eq!(queue.next_frame(), Some(4.0));
+        queue.stop();
+        assert_eq!(wait_outcome(d), PlaybackOutcome::Interrupted);
     }
 
     #[test]

@@ -182,7 +182,9 @@ fn is_vowel_sound(k: PhonemeKind) -> bool {
 }
 
 pub fn phonemize_word(word: &str, next_first: Option<char>) -> Vec<(PhonemeKind, u8)> {
-    let lower = word.to_lowercase();
+    let lower = word
+        .trim_end_matches(['.', ',', '!', '?', ';', ':', '"', ')', ']', '»'])
+        .to_lowercase();
     if lower.len() == 1 {
         return spell_letter(lower.chars().next().unwrap_or(' '));
     }
@@ -932,5 +934,45 @@ mod tests {
     fn letter_spelling() {
         assert_eq!(kinds("g"), vec![JH, IY]);
         assert_eq!(kinds("q"), vec![K, Y, UW]);
+    }
+
+    #[test]
+    fn interjections() {
+        assert_eq!(kinds("ah"), vec![AA]);
+        assert_eq!(kinds("wow"), vec![W, AU]);
+        assert_eq!(kinds("oops"), vec![UW, P, S]);
+        assert_eq!(kinds("ouch"), vec![AU, CH]);
+        assert_eq!(kinds("yay"), vec![Y, EY]);
+        assert_eq!(kinds("whoa"), vec![W, OW]);
+        assert_eq!(kinds("uh"), vec![AH]);
+        assert_eq!(kinds("um"), vec![AH, M]);
+        assert_eq!(kinds("uh-huh"), vec![AH, H, AH]);
+        assert_eq!(kinds("phew"), vec![F, Y, UW]);
+        assert_eq!(kinds("ahem"), vec![AH, H, EH, M]);
+        assert_eq!(kinds("oof"), vec![UW, F]);
+        assert_eq!(kinds("wow!"), vec![W, AU]);
+    }
+
+    #[test]
+    fn common_words() {
+        assert_eq!(kinds("the"), vec![DH, AH]);
+        assert_eq!(kinds("of"), vec![AH, V]);
+        assert_eq!(kinds("you"), vec![Y, UW]);
+        assert_eq!(kinds("shall"), vec![SH, AE, L]);
+        assert_eq!(kinds("might"), vec![M, AI, T]);
+        assert_eq!(kinds("must"), vec![M, AH, S, T]);
+        assert_eq!(kinds("under"), vec![AH, N, D, ER]);
+        assert_eq!(kinds("many"), vec![M, EH, N, IY]);
+        assert_eq!(kinds("even"), vec![IY, V, AX, N]);
+        assert_eq!(kinds("still"), vec![S, T, IH, L]);
+        assert_eq!(kinds("ok"), vec![OW, K, EY]);
+        assert_eq!(kinds("please"), vec![P, L, IY, Z]);
+        assert_eq!(kinds("thanks"), vec![TH, AE, NG, K, S]);
+        assert_eq!(kinds("sorry"), vec![S, AA, R, IY]);
+        assert_eq!(kinds("hi"), vec![H, AI]);
+        assert_eq!(kinds("great"), vec![G, R, EY, T]);
+        assert_eq!(kinds("nice"), vec![N, AI, S]);
+        assert_eq!(kinds("wrong"), vec![R, AO, NG]);
+        assert_eq!(kinds("up"), vec![AH, P]);
     }
 }

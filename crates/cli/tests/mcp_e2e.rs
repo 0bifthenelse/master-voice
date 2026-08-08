@@ -111,7 +111,7 @@ fn mcp_protocol_roundtrip() {
     );
     let text = response["result"]["content"][0]["text"].as_str().unwrap();
     assert!(
-        text.contains("Spoken") || text.contains("audio") || text.contains("daemon"),
+        text.contains("Speaking") || text.contains("audio") || text.contains("daemon"),
         "unexpected: {text}"
     );
 
