@@ -118,3 +118,41 @@ fn stdout_is_quiet_on_success() {
         assert!(stdout_text(&output).is_empty(), "stdout must be silent");
     }
 }
+
+#[test]
+fn positional_text_writes_headless_wav() {
+    let env = TestEnv::new();
+    let path = env.runtime_dir.join("positional.wav");
+    let output = env.run(&[
+        "--output-wav",
+        path.to_str().unwrap(),
+        "--language",
+        "en-US",
+        "Hello. Master voice is online.",
+    ]);
+    assert!(output.status.success(), "{}", stderr_text(&output));
+    let bytes = std::fs::read(path).unwrap();
+    assert_eq!(&bytes[..4], b"RIFF");
+    assert_eq!(&bytes[8..12], b"WAVE");
+    assert!(bytes.len() > 44);
+}
+
+#[test]
+fn stdin_text_writes_headless_wav() {
+    let env = TestEnv::new();
+    let path = env.runtime_dir.join("stdin.wav");
+    let output = env.run_stdin(
+        &[
+            "--output-wav",
+            path.to_str().unwrap(),
+            "--language",
+            "fr-FR",
+        ],
+        "Un bon vin blanc, mon ami.",
+    );
+    assert!(output.status.success(), "{}", stderr_text(&output));
+    let bytes = std::fs::read(path).unwrap();
+    assert_eq!(&bytes[..4], b"RIFF");
+    assert_eq!(&bytes[8..12], b"WAVE");
+    assert!(bytes.len() > 44);
+}

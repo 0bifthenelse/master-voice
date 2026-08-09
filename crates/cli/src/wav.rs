@@ -19,10 +19,10 @@ pub fn write_wav(path: &std::path::Path, samples: &[f32], sample_rate: u32) -> s
     file.write_all(&16u16.to_le_bytes())?; // bits per sample
     file.write_all(b"data")?;
     file.write_all(&data_len.to_le_bytes())?;
-    let mut pcm = Vec::with_capacity(samples.len());
-    for &s in samples {
-        let clamped = s.clamp(-1.0, 1.0);
-        pcm.extend_from_slice(&((clamped * 32767.0) as i16).to_le_bytes());
+    let samples = master_voice_audio::to_i16(samples);
+    let mut pcm = Vec::with_capacity(samples.len() * 2);
+    for sample in samples {
+        pcm.extend_from_slice(&sample.to_le_bytes());
     }
     file.write_all(&pcm)?;
     file.flush()

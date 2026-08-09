@@ -7,14 +7,13 @@
 
 /// Hz, phrase base pitch.
 pub const BASE_F0: f32 = 118.0;
-/// Shipped character depth: unmistakable character, crisp consonants.
-/// 0.82 = 50 % more robotic than the original 0.55 default: 82 % of the
-/// semitone staircase, twin source at 41 % mix, ring at ~13 % wet.
-pub const DEFAULT_ROBOTIC_DEPTH: f32 = 0.82;
+/// Shipped character depth: unmistakable character with crisp consonants.
+/// The 0.55 default preserves the original formant balance.
+pub const DEFAULT_ROBOTIC_DEPTH: f32 = 0.55;
 /// Twin source offset, cents.
 pub const DETUNE_CENTS: f32 = 6.0;
-/// Twin mix, × depth; hard cap 0.50 (an equal-level twin hollows F1).
-pub const DETUNE_MIX_MAX: f32 = 0.50;
+/// Twin mix, × depth; capped below equal level because 0.50 hollows F1.
+pub const DETUNE_MIX_MAX: f32 = 0.45;
 /// Ring modulator rate, Hz.
 pub const RING_HZ: f32 = 62.0;
 /// Ring wet, × depth; hard cap 0.25. 0.16 keeps the sidebands weak
@@ -54,5 +53,5 @@ pub const PRESENCE_HZ: f32 = 1500.0;
 /// calibration puts fricatives at the vowel peak already; the shelf adds
 /// a gentle lift above the corner without clamping.
 pub const PRESENCE_GAIN: f32 = 0.2;
-/// Fixed make-up gain (streaming-safe: no peak normalisation possible).
-pub const OUT_GAIN: f32 = 0.72;
+/// Fixed make-up gain calibrated so the default corpus stays below 0.75.
+pub const OUT_GAIN: f32 = 0.64;

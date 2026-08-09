@@ -39,6 +39,10 @@ impl Resonator {
         self.b = 2.0 * r * (2.0 * std::f32::consts::PI * freq.clamp(80.0, sr * 0.47) / sr).cos();
         self.a = 1.0 - self.b - self.c;
     }
+    fn reset_output(&mut self, sample: f32) {
+        self.y1 = sample;
+        self.y2 = sample;
+    }
 
     fn tick(&mut self, x: f32) -> f32 {
         let y = self.a * x + self.b * self.y1 + self.c * self.y2;
@@ -48,8 +52,8 @@ impl Resonator {
     }
 }
 
-/// Anti-resonator (nasal zero). Same `set` formula, then inverted
-/// coefficients; state never touched by `set`.
+/// FIR anti-resonator (nasal zero). `set` installs the bounded canonical
+/// zero coefficients; state is reset only at nasal/oral transitions.
 struct AntiResonator {
     a: f32,
     b: f32,
@@ -71,12 +75,15 @@ impl AntiResonator {
 
     fn set(&mut self, freq: f32, bw: f32, sr: f32) {
         let r = (-std::f32::consts::PI * bw.max(20.0) / sr).exp();
-        let c = -(r * r);
-        let b = 2.0 * r * (2.0 * std::f32::consts::PI * freq.clamp(80.0, sr * 0.47) / sr).cos();
-        let a = 1.0 - b - c;
-        self.a = 1.0 / a;
-        self.b = -b / a;
-        self.c = -c / a;
+        let omega = 2.0 * std::f32::consts::PI * freq.clamp(80.0, sr * 0.47) / sr;
+        self.a = 1.0;
+        self.b = -2.0 * r * omega.cos();
+        self.c = r * r;
+    }
+
+    fn reset_input(&mut self, sample: f32) {
+        self.x1 = sample;
+        self.x2 = sample;
     }
 
     fn tick(&mut self, x: f32) -> f32 {
@@ -218,6 +225,7 @@ pub struct Renderer {
     cascade: [Resonator; 5],
     nasal_zero: AntiResonator,
     nasal_pole: Resonator,
+    nasal_active: bool,
     parallel: [Resonator; 4],
     voice: Voice,
     noise: Lcg,
@@ -245,6 +253,7 @@ impl Renderer {
             cascade: std::array::from_fn(|_| Resonator::new()),
             nasal_zero: AntiResonator::new(),
             nasal_pole: Resonator::new(),
+            nasal_active: false,
             parallel: std::array::from_fn(|_| Resonator::new()),
             voice: Voice::new(sr),
             noise: Lcg::new(0x9E37_79B9),
@@ -355,20 +364,29 @@ impl Renderer {
         let mut x = voiced + aspiration;
 
         // Nasal pair: pass-through when an == 0, else the nasal pole/zero.
-        if f.an > 0.0 {
+        // Reset both histories only when crossing the branch boundary so
+        // stale oral/nasal state cannot create a transition transient.
+        let nasal_active = f.an > 0.0;
+        if nasal_active {
             self.nasal_zero.set(450.0, 300.0, sr);
             self.nasal_pole.set(270.0, 300.0, sr);
+            if !self.nasal_active {
+                self.nasal_zero.reset_input(x);
+            }
+            let z = self.nasal_zero.tick(x);
+            if !self.nasal_active {
+                self.nasal_pole.reset_output(z);
+            }
+            let p = self.nasal_pole.tick(z);
+            x = z * (1.0 - f.an) + p * f.an;
         } else {
-            self.nasal_zero.a = 1.0;
-            self.nasal_zero.b = 0.0;
-            self.nasal_zero.c = 0.0;
-            self.nasal_pole.a = 1.0;
-            self.nasal_pole.b = 0.0;
-            self.nasal_pole.c = 0.0;
+            if self.nasal_active {
+                self.nasal_zero.reset_input(0.0);
+                self.nasal_pole.reset_output(0.0);
+            }
+            // Bypass both filters while oral.
         }
-        let z = self.nasal_zero.tick(x);
-        let p = self.nasal_pole.tick(z);
-        x = z * (1.0 - f.an) + p * f.an;
+        self.nasal_active = nasal_active;
 
         // Cascade R5 -> R4 -> R3 -> R2 -> R1.
         for k in (0..5).rev() {
@@ -531,6 +549,7 @@ mod tests {
         post_chain(
             &mut whole,
             0.55,
+            1.0,
             &mut PostState::default(),
             ChunkPos {
                 first: true,
@@ -548,6 +567,7 @@ mod tests {
         post_chain(
             &mut a,
             0.55,
+            1.0,
             &mut state,
             ChunkPos {
                 first: true,
@@ -557,6 +577,7 @@ mod tests {
         post_chain(
             &mut b,
             0.55,
+            1.0,
             &mut state,
             ChunkPos {
                 first: false,
@@ -566,6 +587,7 @@ mod tests {
         post_chain(
             &mut c,
             0.55,
+            1.0,
             &mut state,
             ChunkPos {
                 first: false,
@@ -579,5 +601,76 @@ mod tests {
         // Fades apply only at the global utterance edges, so every sample
         // must match the single-shot call.
         assert_eq!(whole, chunked);
+    }
+    #[test]
+    fn nasal_oral_transitions_keep_raw_renderer_bounded() {
+        let mut oral = Frame::new();
+        oral.f = [500.0, 1_500.0, 2_500.0, 3_500.0, 4_500.0];
+        oral.bw = [60.0, 90.0, 120.0, 180.0, 250.0];
+        oral.av = 0.8;
+
+        let mut nasal = oral;
+        nasal.an = 0.8;
+        let trace = [
+            ("oral onset", oral),
+            ("nasal onset", nasal),
+            ("nasal sustain", nasal),
+            ("oral release", oral),
+            ("nasal re-entry", nasal),
+        ];
+
+        let mut renderer = Renderer::new(0.55);
+        for (label, frame) in trace {
+            let samples = renderer.render(&[frame]);
+            if let Some((index, sample)) = samples
+                .iter()
+                .copied()
+                .enumerate()
+                .find(|(_, sample)| !sample.is_finite() || sample.abs() >= 4.0)
+            {
+                eprintln!(
+                    "{label}: first offending operation Renderer::render/tick at sample \
+                     {index}: {sample}"
+                );
+                panic!("{label}: raw renderer exceeded safety bound");
+            }
+            let peak = samples
+                .iter()
+                .fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
+            assert!(peak < 4.0, "{label}: raw peak={peak}");
+        }
+    }
+
+    #[test]
+    fn legal_filter_grid_stays_finite_and_bounded() {
+        let sr = SAMPLE_RATE as f32;
+        for (freq, bandwidth) in [
+            (80.0, 50.0),
+            (450.0, 300.0),
+            (1_500.0, 135.0),
+            (3_300.0, 232.0),
+            (3_750.0, 250.0),
+            (5_000.0, 800.0),
+            (sr * 0.47, 800.0),
+        ] {
+            let mut resonator = Resonator::new();
+            resonator.set(freq, bandwidth, sr);
+            let mut anti_resonator = AntiResonator::new();
+            anti_resonator.set(freq, bandwidth, sr);
+
+            for sample_index in 0..2_048 {
+                let input = if sample_index == 0 { 1.0 } else { 0.0 };
+                let pole = resonator.tick(input);
+                let zero = anti_resonator.tick(input);
+                assert!(
+                    pole.is_finite() && pole.abs() < 16.0,
+                    "pole freq={freq}, bandwidth={bandwidth}, sample={sample_index}, value={pole}"
+                );
+                assert!(
+                    zero.is_finite() && zero.abs() < 4.0,
+                    "zero freq={freq}, bandwidth={bandwidth}, sample={sample_index}, value={zero}"
+                );
+            }
+        }
     }
 }

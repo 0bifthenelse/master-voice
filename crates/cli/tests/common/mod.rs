@@ -2,6 +2,27 @@
 
 use std::path::PathBuf;
 use std::process::{Command, Output};
+use std::time::Duration;
+
+pub fn shutdown_daemon(runtime_dir: &std::path::Path) {
+    let socket = runtime_dir.join("master-voice.sock");
+    let Ok(mut stream) = std::os::unix::net::UnixStream::connect(&socket) else {
+        return;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
+    if std::io::Write::write_all(&mut stream, b"{\"op\":\"shutdown\",\"id\":0}\n").is_err() {
+        return;
+    }
+    let _ = std::io::Write::flush(&mut stream);
+    let mut response = String::new();
+    let _ = std::io::BufRead::read_line(&mut std::io::BufReader::new(stream), &mut response);
+    for _ in 0..100 {
+        if !socket.exists() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
 
 pub struct TestEnv {
     pub runtime_dir: PathBuf,
@@ -22,7 +43,7 @@ impl TestEnv {
         std::fs::create_dir_all(&config_dir).unwrap();
         std::fs::write(
             config_dir.join("config.toml"),
-            "daemon_idle_timeout_secs = 2\n",
+            "daemon_idle_timeout_secs = 2\ndevice = \"definitely-not-a-device-xyz\"\n",
         )
         .unwrap();
         Self { runtime_dir }
@@ -61,6 +82,7 @@ impl TestEnv {
 
 impl Drop for TestEnv {
     fn drop(&mut self) {
+        shutdown_daemon(&self.runtime_dir);
         let _ = std::fs::remove_dir_all(&self.runtime_dir);
     }
 }

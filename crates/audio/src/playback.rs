@@ -4,6 +4,8 @@ use std::collections::VecDeque;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 
+const DECLICK_SAMPLES: usize = 128;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaybackOutcome {
     Played,
@@ -22,6 +24,11 @@ pub struct PlaybackQueue {
     current: Option<Queued>,
     pos: usize,
     limit: usize,
+    last_sample: Option<f32>,
+    last_utterance: Option<u64>,
+    ramp_out_start: Option<f32>,
+    ramp_out_pos: usize,
+    ramp_in_pos: Option<usize>,
 }
 
 impl PlaybackQueue {
@@ -31,6 +38,11 @@ impl PlaybackQueue {
             current: None,
             pos: 0,
             limit: limit.max(1),
+            last_sample: None,
+            last_utterance: None,
+            ramp_out_start: None,
+            ramp_out_pos: 0,
+            ramp_in_pos: None,
         }
     }
 
@@ -43,10 +55,20 @@ impl PlaybackQueue {
     }
 
     pub fn is_idle(&self) -> bool {
-        self.current.is_none() && self.queue.is_empty()
+        self.current.is_none() && self.queue.is_empty() && self.ramp_out_start.is_none()
+    }
+
+    fn begin_ramp_out(&mut self) {
+        if self.current.is_some() {
+            if let Some(sample) = self.last_sample.filter(|sample| sample.is_finite()) {
+                self.ramp_out_start = Some(sample);
+                self.ramp_out_pos = 0;
+            }
+        }
     }
 
     fn clear(&mut self, outcome: PlaybackOutcome) {
+        self.begin_ramp_out();
         if let Some(queued) = self.current.take() {
             if let Some(done) = queued.done {
                 let _ = done.send(outcome);
@@ -58,11 +80,19 @@ impl PlaybackQueue {
             }
         }
         self.pos = 0;
+        self.ramp_in_pos = None;
+        self.last_utterance = None;
     }
 
     fn advance(&mut self) {
         self.current = self.queue.pop_front();
         self.pos = 0;
+        if let Some(current) = &self.current {
+            if self.last_utterance != Some(current.id) {
+                self.ramp_in_pos = Some(0);
+            }
+            self.last_utterance = Some(current.id);
+        }
     }
 
     pub fn push(
@@ -72,6 +102,7 @@ impl PlaybackQueue {
         resampled: Vec<f32>,
         interrupt: bool,
     ) -> Result<Receiver<PlaybackOutcome>, AudioError> {
+        device::validate_normalized_pcm(&resampled)?;
         if interrupt {
             self.clear(PlaybackOutcome::Interrupted);
         }
@@ -102,15 +133,16 @@ impl PlaybackQueue {
     }
 
     pub fn interrupt_current(&mut self) {
+        self.begin_ramp_out();
         if let Some(current) = self.current.take() {
             if let Some(done) = current.done {
                 let _ = done.send(PlaybackOutcome::Interrupted);
             }
         }
         self.pos = 0;
-        if self.current.is_none() {
-            self.advance();
-        }
+        self.ramp_in_pos = None;
+        self.last_utterance = None;
+        self.advance();
     }
 
     /// Interrupt the current item and every queued item of this utterance
@@ -118,12 +150,15 @@ impl PlaybackQueue {
     /// stay queued; their FIFO position is preserved.
     pub fn interrupt_utterance(&mut self, id: u64) {
         if self.current.as_ref().is_some_and(|q| q.id == id) {
+            self.begin_ramp_out();
             if let Some(current) = self.current.take() {
                 if let Some(done) = current.done {
                     let _ = done.send(PlaybackOutcome::Interrupted);
                 }
             }
             self.pos = 0;
+            self.ramp_in_pos = None;
+            self.last_utterance = None;
         }
         let mut kept = VecDeque::new();
         for mut queued in self.queue.drain(..) {
@@ -142,11 +177,30 @@ impl PlaybackQueue {
     }
 
     pub fn next_frame(&mut self) -> Option<f32> {
+        if let Some(start) = self.ramp_out_start {
+            let gain = 1.0 - self.ramp_out_pos as f32 / (DECLICK_SAMPLES.saturating_sub(1)) as f32;
+            let value = start * gain;
+            self.ramp_out_pos += 1;
+            if self.ramp_out_pos == DECLICK_SAMPLES {
+                self.ramp_out_start = None;
+                self.ramp_out_pos = 0;
+                self.last_sample = self.current.as_ref().map(|_| 0.0);
+            }
+            return Some(value);
+        }
+
         loop {
             if let Some(current) = &mut self.current {
                 if self.pos < current.resampled.len() {
-                    let value = current.resampled[self.pos];
+                    let mut value = current.resampled[self.pos];
                     self.pos += 1;
+                    if let Some(ramp_pos) = self.ramp_in_pos {
+                        let gain = ramp_pos as f32 / (DECLICK_SAMPLES.saturating_sub(1)) as f32;
+                        value *= gain;
+                        let next = ramp_pos + 1;
+                        self.ramp_in_pos = (next < DECLICK_SAMPLES).then_some(next);
+                    }
+                    self.last_sample = Some(value);
                     return Some(value);
                 }
                 if let Some(done) = current.done.take() {
@@ -238,7 +292,7 @@ enum Command {
         samples: Vec<f32>,
         rate: u32,
         interrupt: bool,
-        reply: std::sync::mpsc::SyncSender<Result<Receiver<PlaybackOutcome>, String>>,
+        reply: std::sync::mpsc::SyncSender<Result<Receiver<PlaybackOutcome>, AudioError>>,
     },
     Current {
         reply: std::sync::mpsc::SyncSender<Option<(u64, u64)>>,
@@ -280,10 +334,10 @@ impl PlaybackThread {
                                     PlaybackController::open(device.as_deref(), queue_limit).ok();
                             }
                             let result = match &controller {
-                                Some(controller) => controller
-                                    .push(id, owner, samples, rate, interrupt)
-                                    .map_err(|e| e.to_string()),
-                                None => Err("no audio output device available".to_string()),
+                                Some(controller) => {
+                                    controller.push(id, owner, samples, rate, interrupt)
+                                }
+                                None => Err(AudioError::NoDevice),
                             };
                             let _ = reply.send(result);
                         }
@@ -341,15 +395,6 @@ impl PlaybackThread {
         reply_rx
             .recv()
             .map_err(|_| AudioError::Stream("playback thread stopped".into()))?
-            .map_err(|message| {
-                if message.contains("no audio output device") {
-                    AudioError::NoDevice
-                } else if message.contains("queue is full") {
-                    AudioError::QueueFull
-                } else {
-                    AudioError::Stream(message)
-                }
-            })
     }
 
     pub fn current(&self) -> Option<(u64, u64)> {
@@ -394,36 +439,51 @@ mod tests {
     }
 
     #[test]
-    fn plays_samples_in_order() {
+    fn new_utterance_ramps_in_and_preserves_sample_order() {
         let mut queue = PlaybackQueue::new(4);
-        queue.push(1, 1, vec![1.0, 2.0, 3.0], false).unwrap();
-        assert_eq!(queue.next_frame(), Some(1.0));
-        assert_eq!(queue.next_frame(), Some(2.0));
-        assert_eq!(queue.next_frame(), Some(3.0));
+        queue.push(1, 1, vec![0.5; DECLICK_SAMPLES], false).unwrap();
+        let samples: Vec<f32> = (0..DECLICK_SAMPLES)
+            .map(|_| queue.next_frame().unwrap())
+            .collect();
+        assert_eq!(samples[0], 0.0);
+        assert_eq!(samples[DECLICK_SAMPLES - 1], 0.5);
+        assert!(samples.windows(2).all(|pair| pair[0] <= pair[1]));
         assert_eq!(queue.next_frame(), None);
         assert!(queue.is_idle());
     }
 
     #[test]
-    fn queues_second_utterance() {
+    fn successive_items_with_same_utterance_do_not_ramp_again() {
         let mut queue = PlaybackQueue::new(4);
-        queue.push(1, 1, vec![1.0], false).unwrap();
-        queue.push(2, 1, vec![2.0], false).unwrap();
-        assert_eq!(queue.len(), 2);
-        assert_eq!(queue.next_frame(), Some(1.0));
-        assert_eq!(queue.next_frame(), Some(2.0));
+        queue
+            .push(1, 1, vec![0.25; DECLICK_SAMPLES], false)
+            .unwrap();
+        queue.push(1, 1, vec![0.5], false).unwrap();
+        for _ in 0..DECLICK_SAMPLES {
+            queue.next_frame().unwrap();
+        }
+        assert_eq!(queue.next_frame(), Some(0.5));
         assert_eq!(queue.next_frame(), None);
     }
 
     #[test]
-    fn interrupt_replaces_and_notifies() {
+    fn interrupt_replaces_with_declicked_transition_and_notifies() {
         let mut queue = PlaybackQueue::new(4);
-        let first = queue.push(1, 1, vec![1.0; 100], false).unwrap();
-        let second = queue.push(2, 1, vec![2.0; 100], false).unwrap();
-        let third = queue.push(3, 1, vec![3.0; 100], true).unwrap();
+        let first = queue.push(1, 1, vec![0.8; 256], false).unwrap();
+        for _ in 0..DECLICK_SAMPLES {
+            queue.next_frame().unwrap();
+        }
+        let second = queue.push(2, 1, vec![0.2; 100], false).unwrap();
+        let third = queue.push(3, 1, vec![0.3; 256], true).unwrap();
         assert_eq!(wait_outcome(first), PlaybackOutcome::Interrupted);
         assert_eq!(wait_outcome(second), PlaybackOutcome::Interrupted);
-        assert_eq!(queue.next_frame(), Some(3.0));
+        let ramp: Vec<f32> = (0..DECLICK_SAMPLES)
+            .map(|_| queue.next_frame().unwrap())
+            .collect();
+        assert_eq!(ramp[0], 0.8);
+        assert_eq!(ramp[DECLICK_SAMPLES - 1], 0.0);
+        assert!(ramp.windows(2).all(|pair| pair[0] >= pair[1]));
+        assert_eq!(queue.next_frame(), Some(0.0));
         assert_eq!(queue.len(), 1);
         queue.stop();
         assert_eq!(wait_outcome(third), PlaybackOutcome::Interrupted);
@@ -443,10 +503,10 @@ mod tests {
     #[test]
     fn bounded_queue_rejects_overflow() {
         let mut queue = PlaybackQueue::new(2);
-        queue.push(1, 1, vec![1.0; 10], false).unwrap();
-        queue.push(2, 1, vec![2.0; 10], false).unwrap();
+        queue.push(1, 1, vec![0.1; 10], false).unwrap();
+        queue.push(2, 1, vec![0.2; 10], false).unwrap();
         assert!(matches!(
-            queue.push(3, 1, vec![3.0; 10], false),
+            queue.push(3, 1, vec![0.3; 10], false),
             Err(AudioError::QueueFull)
         ));
     }
@@ -454,18 +514,51 @@ mod tests {
     #[test]
     fn interrupt_utterance_kills_only_its_own_items() {
         let mut queue = PlaybackQueue::new(8);
-        let a = queue.push(7, 1, vec![1.0; 10], false).unwrap();
-        let b = queue.push(7, 1, vec![2.0; 10], false).unwrap();
-        let c = queue.push(7, 1, vec![3.0; 10], false).unwrap();
-        let d = queue.push(8, 1, vec![4.0; 10], false).unwrap();
+        let a = queue.push(7, 1, vec![0.1; 10], false).unwrap();
+        let b = queue.push(7, 1, vec![0.2; 10], false).unwrap();
+        let c = queue.push(7, 1, vec![0.3; 10], false).unwrap();
+        let d = queue.push(8, 1, vec![0.4; 10], false).unwrap();
         queue.interrupt_utterance(7);
         assert_eq!(wait_outcome(a), PlaybackOutcome::Interrupted);
         assert_eq!(wait_outcome(b), PlaybackOutcome::Interrupted);
         assert_eq!(wait_outcome(c), PlaybackOutcome::Interrupted);
         assert_eq!(queue.len(), 1, "only the id-8 item survives");
-        assert_eq!(queue.next_frame(), Some(4.0));
+        assert_eq!(queue.next_frame(), Some(0.0));
         queue.stop();
         assert_eq!(wait_outcome(d), PlaybackOutcome::Interrupted);
+    }
+
+    #[test]
+    fn invalid_interrupting_push_does_not_mutate_queue() {
+        let mut queue = PlaybackQueue::new(4);
+        let first = queue.push(1, 1, vec![0.25; 4], false).unwrap();
+        assert!(matches!(
+            queue.push(2, 1, vec![0.0, f32::NAN], true),
+            Err(AudioError::InvalidSamples { index: 1 })
+        ));
+        assert_eq!(queue.current(), Some((1, 1)));
+        assert_eq!(queue.next_frame(), Some(0.0));
+        queue.stop();
+        assert_eq!(wait_outcome(first), PlaybackOutcome::Interrupted);
+    }
+
+    #[test]
+    fn stop_emits_fixed_ramp_to_zero() {
+        let mut queue = PlaybackQueue::new(2);
+        let outcome = queue.push(1, 1, vec![0.75; 256], false).unwrap();
+        for _ in 0..DECLICK_SAMPLES {
+            queue.next_frame().unwrap();
+        }
+        queue.stop();
+        assert_eq!(wait_outcome(outcome), PlaybackOutcome::Interrupted);
+        let ramp: Vec<f32> = (0..DECLICK_SAMPLES)
+            .map(|_| queue.next_frame().unwrap())
+            .collect();
+        assert_eq!(ramp[0], 0.75);
+        assert_eq!(ramp[DECLICK_SAMPLES - 1], 0.0);
+        assert!(ramp.windows(2).all(|pair| pair[0] >= pair[1]));
+        assert_eq!(queue.next_frame(), None);
+        assert!(queue.is_idle());
     }
 
     #[test]

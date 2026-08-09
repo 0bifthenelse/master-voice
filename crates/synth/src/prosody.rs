@@ -691,12 +691,16 @@ pub fn build_frames_chunk(phonemes: &[Phoneme], opts: &SynthOptions, pos: ChunkP
                 } else {
                     0.0
                 };
-                for _ in 0..n {
+                for pause_index in 0..n {
                     let mut frame = Frame::new();
                     frame.f = last_formants.0;
                     frame.bw = last_formants.1;
                     frame.oq = oq;
-                    frame.av = carry;
+                    frame.av = if n > 1 {
+                        carry * (1.0 - pause_index as f32 / (n - 1) as f32)
+                    } else {
+                        0.0
+                    };
                     tagged.push(Tagged {
                         frame,
                         phoneme: i,
@@ -1019,6 +1023,25 @@ mod tests {
         s.boundary_after = Boundary::Word;
         let unvoiced = build_frames(&[s, Phoneme::new(PhonemeKind::AH)], &opts);
         assert_eq!(gap_av(&unvoiced), 0.0, "unvoiced gap must stay silent");
+    }
+
+    #[test]
+    fn word_pause_voicing_tail_decays_linearly_to_zero() {
+        let mut vowel = Phoneme::new(PhonemeKind::AH);
+        vowel.boundary_after = Boundary::Word;
+        let frames = build_frames(&[vowel], &SynthOptions::default());
+        let pause_frames = (pause_for(Boundary::Word) * params::SAMPLE_RATE as f32
+            / FRAME_SAMPLES as f32)
+            .round() as usize;
+        let tail = &frames[frames.len() - pause_frames..];
+
+        assert!(tail.first().unwrap().av > 0.0);
+        assert_eq!(tail.last().unwrap().av, 0.0);
+        let step = tail[0].av - tail[1].av;
+        assert!(tail.windows(2).all(|pair| {
+            let delta = pair[0].av - pair[1].av;
+            delta >= 0.0 && (delta - step).abs() < 1e-6
+        }));
     }
 
     #[test]

@@ -1,7 +1,7 @@
 # master-voice
 
 Offline, Linux-first synthetic speech system in Rust. Robotic but highly
-intelligible voice (Klatt-style formant synthesis — no models, no network, no
+intelligible voice (Klatt-style formant synthesis, no models, no network, no
 system packages). One engine behind a CLI, an MCP server, and OMP automatic
 speech. Word transitions are smoothed: f0 follows the intonation contour
 continuously across word gaps (no pitch dips) and voiced gaps carry a soft
@@ -25,8 +25,8 @@ target/release/master-voice --output-wav /tmp/out.wav "Save to WAV instead of pl
 That is the whole system: one binary, no configuration, no network. Language
 routing, pronunciation overrides, the auto-spawned playback daemon and the
 streaming MCP server all work out of the box; the rest of this file is the
-detail. The default character (robotic_depth 0.82) is a semitone-stepped,
-detuned-twin, ring-modulated REPLICANT — unmistakably synthetic, still
+detail. The default character (robotic_depth 0.55) is a semitone-stepped,
+detuned-twin, ring-modulated REPLICANT. Unmistakably synthetic, still
 intelligible. `--robotic` overrides the amount for one call so you can
 audition the range by ear.
 
@@ -46,7 +46,7 @@ dependencies: an ALSA/PulseAudio/PipeWire output device (via CPAL).
 install -m 755 target/release/master-voice ~/.local/bin/master-voice
 ```
 
-Never overwrites an existing binary by itself — check for a pre-existing file
+Never overwrites an existing binary by itself. Check for a pre-existing file
 first. Ensure `~/.local/bin` is on `PATH`.
 
 ## Usage
@@ -67,7 +67,7 @@ master-voice serve       # playback daemon in the foreground (normally auto-spaw
 ```
 
 No arguments on a TTY prints usage and exits. Text is always opaque speech
-data — it is never shell-evaluated, executed, or sent anywhere.
+data. It is never shell-evaluated, executed, or sent anywhere.
 
 Exit codes: 0 ok · 1 usage · 2 config · 3 language · 4 synthesis · 5 audio ·
 6 daemon · 7 queue full.
@@ -137,7 +137,7 @@ resample → CPAL playback (bounded FIFO, interrupt, one daemon per user)
 Crates: `linguistics` (G2P/normalization), `synth` (formant synthesizer),
 `audio` (CPAL + queue), `core` (engine + playback daemon), `mcp` (MCP server),
 `cli` (binary). CLI and MCP are clients of the auto-spawned daemon, which is
-the single playback authority — this gives warm synthesis, cross-process
+the single playback authority. This gives warm synthesis, cross-process
 interrupt, and clean shutdown.
 
 ## Verification
@@ -162,4 +162,4 @@ end-to-end, CLI behaviors.
 
 Code: MIT OR Apache-2.0. All dependencies are permissively licensed (no
 GPL/AGPL; see COMPLETION_REPORT.md §17 for the full audit). No model or data
-licenses apply — no external data is used.
+licenses apply. No external data is used.

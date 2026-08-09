@@ -1,3 +1,5 @@
+mod common;
+
 use serde_json::Value;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -6,6 +8,7 @@ struct McpClient {
     child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
+    runtime_dir: std::path::PathBuf,
 }
 
 impl McpClient {
@@ -28,6 +31,7 @@ impl McpClient {
             child,
             stdin,
             stdout,
+            runtime_dir: runtime_dir.to_path_buf(),
         }
     }
 
@@ -60,6 +64,7 @@ impl Drop for McpClient {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+        common::shutdown_daemon(&self.runtime_dir);
     }
 }
 
@@ -73,6 +78,13 @@ fn make_env() -> std::path::PathBuf {
             .as_nanos()
     ));
     std::fs::create_dir_all(&dir).unwrap();
+    let config_dir = dir.join("config").join("master-voice");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("config.toml"),
+        "device = \"definitely-not-a-device-xyz\"\n",
+    )
+    .unwrap();
     dir
 }
 
@@ -185,4 +197,53 @@ fn mcp_large_text_handled() {
     client.send(serde_json::json!({"jsonrpc":"2.0","method":"shutdown","id":3}));
     let _ = client.recv();
     let _ = client.child.wait();
+}
+
+#[test]
+fn mcp_multi_append_stream_finalizes() {
+    let runtime_dir = make_env();
+    let mut client = McpClient::spawn(&runtime_dir);
+    let _ = client.request(
+        1,
+        "initialize",
+        serde_json::json!({
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "clientInfo": { "name": "stream-test", "version": "1" }
+        }),
+    );
+    client.send(serde_json::json!({"jsonrpc":"2.0","method":"notifications/initialized"}));
+
+    for (id, text, final_) in [
+        (2, "MASTER", false),
+        (3, "VOICE", false),
+        (4, "ONLINE", true),
+    ] {
+        let response = client.request(
+            id,
+            "tools/call",
+            serde_json::json!({
+                "name": "speak",
+                "arguments": {
+                    "text": text,
+                    "language": "en-US",
+                    "stream": "integration-stream",
+                    "final": final_
+                }
+            }),
+        );
+        assert_eq!(response["id"], id);
+        assert!(
+            response["result"]["isError"].is_boolean(),
+            "missing stream result: {response}"
+        );
+    }
+
+    let response = client.request(5, "shutdown", serde_json::json!({}));
+    assert!(response["result"].is_null());
+    let status = client.child.wait().unwrap();
+    assert!(
+        status.success(),
+        "server exited non-zero after stream finalization"
+    );
 }

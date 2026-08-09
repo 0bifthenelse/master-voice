@@ -21,13 +21,13 @@ pub fn synthesize(phonemes: &[Phoneme], opts: &SynthOptions) -> AudioBuffer {
     dsp::post_chain(
         &mut samples,
         opts.robotic_depth,
+        opts.volume,
         &mut post,
         ChunkPos {
             first: true,
             last: true,
         },
     );
-    dsp::apply_volume(&mut samples, opts.volume);
     AudioBuffer {
         samples,
         sample_rate: params::SAMPLE_RATE,

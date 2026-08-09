@@ -116,10 +116,10 @@ impl StreamSynth {
         master_voice_synth::dsp::post_chain(
             &mut samples,
             self.opts.robotic_depth,
+            self.opts.volume,
             &mut self.post,
             pos,
         );
-        master_voice_synth::dsp::apply_volume(&mut samples, self.opts.volume);
         self.first = false;
         let elapsed = started.elapsed().as_secs_f64() * 1000.0;
         Ok((utterance.language, samples, elapsed))
@@ -192,5 +192,102 @@ mod tests {
         )
         .unwrap();
         assert_eq!(language, Language::French);
+    }
+    fn assert_safe(samples: &[f32], label: &str) {
+        assert!(!samples.is_empty(), "{label}");
+        assert!(
+            samples
+                .iter()
+                .all(|sample| sample.is_finite() && sample.abs() <= 0.95),
+            "{label}"
+        );
+    }
+
+    #[test]
+    fn whole_buffer_corpus_obeys_synthesis_headroom() {
+        let config = Config::default();
+        let settings = EngineSettings::from_config(&config);
+        let overrides = overrides_from_config(&config);
+        for (label, text, language) in [
+            (
+                "english",
+                "HELLO. MASTER VOICE IS ONLINE AND READY.",
+                Language::English,
+            ),
+            (
+                "french",
+                "BONJOUR. UN ENFANT ENTEND MAINTENANT UNE VOIX SYNTHÉTIQUE CLAIRE.",
+                Language::French,
+            ),
+            ("nasal", "UN BON VIN BLANC, MON AMI.", Language::French),
+            ("consonants", "PAPA, TCHAO! SIX CHEZ ZOE.", Language::French),
+        ] {
+            let (_, buffer, _) =
+                synthesize_text(text, Some(language), &settings, &overrides).unwrap();
+            assert_safe(&buffer.samples, label);
+            let peak = buffer
+                .samples
+                .iter()
+                .fold(0.0_f32, |peak, sample| peak.max(sample.abs()));
+            let rms = (buffer
+                .samples
+                .iter()
+                .map(|sample| sample * sample)
+                .sum::<f32>()
+                / buffer.samples.len() as f32)
+                .sqrt();
+            assert!(peak < 0.95, "{label}: peak={peak}");
+            assert!(rms > 0.01, "{label}: rms={rms}");
+        }
+    }
+
+    #[test]
+    fn single_stream_chunk_matches_whole_buffer() {
+        let config = Config::default();
+        let settings = EngineSettings::from_config(&config);
+        let overrides = overrides_from_config(&config);
+        let (_, whole, _) = synthesize_text(
+            "MASTER VOICE IS ONLINE.",
+            Some(Language::English),
+            &settings,
+            &overrides,
+        )
+        .unwrap();
+        let mut stream = StreamSynth::new(&settings);
+        let (_, chunk, _) = stream
+            .chunk(
+                "MASTER VOICE IS ONLINE.",
+                Some(Language::English),
+                &overrides,
+                true,
+            )
+            .unwrap();
+        assert_eq!(whole.samples, chunk);
+    }
+
+    #[test]
+    fn stream_chunks_are_safe_and_boundaries_are_continuous() {
+        let config = Config::default();
+        let settings = EngineSettings::from_config(&config);
+        let overrides = overrides_from_config(&config);
+        let mut stream = StreamSynth::new(&settings);
+        let chunks = ["MASTER", "VOICE", "IS", "ONLINE"];
+        let mut previous: Option<f32> = None;
+        for (index, text) in chunks.iter().enumerate() {
+            let (_, samples, _) = stream
+                .chunk(
+                    text,
+                    Some(Language::English),
+                    &overrides,
+                    index + 1 == chunks.len(),
+                )
+                .unwrap();
+            assert_safe(&samples, text);
+            if let Some(previous) = previous {
+                let delta = (samples[0] - previous).abs();
+                assert!(delta < 0.25, "{text}: boundary delta={delta}");
+            }
+            previous = samples.last().copied();
+        }
     }
 }

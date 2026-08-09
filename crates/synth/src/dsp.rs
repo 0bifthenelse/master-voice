@@ -4,6 +4,7 @@
 
 use crate::character;
 use crate::prosody::ChunkPos;
+const SYNTH_HEADROOM_CEILING: f32 = 0.95;
 
 /// State carried across chunks so the 62 Hz carrier and the shelf filter
 /// stay continuous — without it every chunk boundary clicks.
@@ -17,12 +18,18 @@ pub struct PostState {
 /// 1. presence shelf (always on, NOT depth-scaled — intelligibility),
 /// 2. ring modulation (character, skipped below depth 0.02 but the phase
 ///    still advances so toggling depth never clicks),
-/// 3. fixed make-up gain + soft knee + hard clamp (no peak normalisation,
-///    no `tanh` — normalisation needs the whole buffer, and `tanh` was the
-///    main consonant killer),
+/// 3. fixed make-up gain + clamped user volume + soft knee + final hard
+///    headroom ceiling (no peak normalisation and no `tanh`),
 /// 4. 6 ms fades at the global utterance edges only.
-pub fn post_chain(samples: &mut [f32], depth: f32, state: &mut PostState, pos: ChunkPos) {
+pub fn post_chain(
+    samples: &mut [f32],
+    depth: f32,
+    volume: f32,
+    state: &mut PostState,
+    pos: ChunkPos,
+) {
     let depth = depth.clamp(0.0, 1.0);
+    let volume = volume.clamp(0.0, 2.0);
     if samples.is_empty() {
         return;
     }
@@ -56,16 +63,20 @@ pub fn post_chain(samples: &mut [f32], depth: f32, state: &mut PostState, pos: C
         }
     }
 
-    // 3. Make-up gain, soft knee, hard clamp.
+    // 3. Make-up gain and user volume feed one final safety stage.
     for s in samples.iter_mut() {
-        let v = *s * character::OUT_GAIN;
+        let v = *s * character::OUT_GAIN * volume;
+        if !v.is_finite() {
+            *s = 0.0;
+            continue;
+        }
         let a = v.abs();
-        *s = if a > 0.9 {
+        let limited = if a > 0.9 {
             v.signum() * (0.9 + (a - 0.9) * 0.3)
         } else {
             v
         };
-        *s = s.clamp(-1.0, 1.0);
+        *s = limited.clamp(-SYNTH_HEADROOM_CEILING, SYNTH_HEADROOM_CEILING);
     }
 
     // 4. Fades: 6 ms at the global utterance edges only.
@@ -88,13 +99,6 @@ pub fn post_chain(samples: &mut [f32], depth: f32, state: &mut PostState, pos: C
     }
 }
 
-pub fn apply_volume(samples: &mut [f32], volume: f32) {
-    let gain = volume.clamp(0.0, 2.0);
-    for sample in samples.iter_mut() {
-        *sample *= gain;
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -105,13 +109,16 @@ mod tests {
         post_chain(
             &mut samples,
             0.6,
+            1.0,
             &mut PostState::default(),
             ChunkPos {
                 first: true,
                 last: true,
             },
         );
-        assert!(samples.iter().all(|s| s.is_finite() && s.abs() <= 1.0));
+        assert!(samples
+            .iter()
+            .all(|s| s.is_finite() && s.abs() <= SYNTH_HEADROOM_CEILING));
         let peak = samples.iter().fold(0.0f32, |acc, s| acc.max(s.abs()));
         assert!(peak >= 0.10, "peak={peak}");
     }
@@ -122,6 +129,7 @@ mod tests {
         post_chain(
             &mut samples,
             0.5,
+            1.0,
             &mut PostState::default(),
             ChunkPos {
                 first: true,
@@ -139,6 +147,7 @@ mod tests {
         post_chain(
             &mut samples,
             0.5,
+            1.0,
             &mut PostState::default(),
             ChunkPos {
                 first: false,
@@ -157,6 +166,7 @@ mod tests {
         post_chain(
             &mut a,
             0.0,
+            1.0,
             &mut state,
             ChunkPos {
                 first: true,
@@ -167,6 +177,7 @@ mod tests {
         post_chain(
             &mut b,
             1.0,
+            1.0,
             &mut state,
             ChunkPos {
                 first: false,
@@ -176,5 +187,38 @@ mod tests {
         // The phase must have advanced through the first chunk, so the
         // second chunk's carrier is not phase-0 (no click when depth jumps).
         assert!(phase_after > 0.0);
+    }
+    #[test]
+    fn final_barrier_silences_non_finite_samples() {
+        for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let mut samples = [invalid];
+            post_chain(
+                &mut samples,
+                0.55,
+                1.0,
+                &mut PostState::default(),
+                ChunkPos {
+                    first: false,
+                    last: false,
+                },
+            );
+            assert_eq!(samples, [0.0]);
+        }
+    }
+
+    #[test]
+    fn volume_precedes_the_final_headroom_ceiling() {
+        let mut samples = [10.0, -10.0];
+        post_chain(
+            &mut samples,
+            0.0,
+            2.0,
+            &mut PostState::default(),
+            ChunkPos {
+                first: false,
+                last: false,
+            },
+        );
+        assert_eq!(samples, [SYNTH_HEADROOM_CEILING, -SYNTH_HEADROOM_CEILING]);
     }
 }
