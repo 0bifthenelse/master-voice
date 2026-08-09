@@ -161,5 +161,5 @@ end-to-end, CLI behaviors.
 ## License
 
 Code: MIT OR Apache-2.0. All dependencies are permissively licensed (no
-GPL/AGPL; see COMPLETION_REPORT.md §17 for the full audit). No model or data
+GPL/AGPL). No model or data
 licenses apply. No external data is used.
