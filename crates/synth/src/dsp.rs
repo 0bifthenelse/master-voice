@@ -120,7 +120,7 @@ mod tests {
             .iter()
             .all(|s| s.is_finite() && s.abs() <= SYNTH_HEADROOM_CEILING));
         let peak = samples.iter().fold(0.0f32, |acc, s| acc.max(s.abs()));
-        assert!(peak >= 0.10, "peak={peak}");
+        assert!(peak > 0.10 * character::OUT_GAIN, "peak={peak}");
     }
 
     #[test]
@@ -143,9 +143,20 @@ mod tests {
 
     #[test]
     fn no_fade_when_not_first() {
-        let mut samples = vec![0.5f32; 1000];
+        let mut faded = vec![0.5f32; 1000];
         post_chain(
-            &mut samples,
+            &mut faded,
+            0.5,
+            1.0,
+            &mut PostState::default(),
+            ChunkPos {
+                first: true,
+                last: true,
+            },
+        );
+        let mut plain = vec![0.5f32; 1000];
+        post_chain(
+            &mut plain,
             0.5,
             1.0,
             &mut PostState::default(),
@@ -154,8 +165,13 @@ mod tests {
                 last: true,
             },
         );
-        assert!(samples[0].abs() > 0.3, "leading samples must not be faded");
-        assert!(samples[999].abs() < 0.01, "trailing fade stays");
+        assert!(faded[0].abs() < 0.01, "leading fade must apply when first");
+        assert!(
+            plain[0].abs() > 0.4 * character::OUT_GAIN,
+            "leading samples must not be faded: {}",
+            plain[0]
+        );
+        assert!(plain[999].abs() < 0.01, "trailing fade stays");
     }
 
     #[test]

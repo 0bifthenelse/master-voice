@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::error::Error;
 use master_voice_linguistics::lang::Language;
 use master_voice_linguistics::overrides::Overrides;
+use master_voice_linguistics::phoneme::Boundary;
 use master_voice_synth::SynthOptions;
 
 pub struct SpeakRequest {
@@ -75,12 +76,20 @@ pub fn synthesize_text(
     Ok((utterance.language, buffer, elapsed))
 }
 
-/// Chunked synthesis: the renderer and post-chain state persist across
-/// chunks, so consecutive chunks concatenate sample-continuously (Step 7b).
+fn complete_prefix_len(text: &str) -> usize {
+    text.char_indices()
+        .rev()
+        .find(|(_, c)| c.is_whitespace() || matches!(c, '.' | ',' | '!' | '?' | ';' | ':' | '\n'))
+        .map(|(i, c)| i + c.len_utf8())
+        .unwrap_or(0)
+}
+
 pub struct StreamSynth {
     renderer: master_voice_synth::klatt::Renderer,
     post: master_voice_synth::dsp::PostState,
     opts: SynthOptions,
+    pending: String,
+    default_language: Language,
     first: bool,
 }
 
@@ -91,12 +100,12 @@ impl StreamSynth {
             renderer: master_voice_synth::klatt::Renderer::new(opts.robotic_depth),
             post: master_voice_synth::dsp::PostState::default(),
             opts,
+            pending: String::new(),
+            default_language: settings.language.unwrap_or(Language::French),
             first: true,
         }
     }
 
-    /// Phonemize + render one chunk of text. `last` marks the final chunk
-    /// of the utterance (drives fades and the prosody finality flags).
     pub fn chunk(
         &mut self,
         text: &str,
@@ -105,13 +114,35 @@ impl StreamSynth {
         last: bool,
     ) -> Result<(Language, Vec<f32>, f64), Error> {
         let started = std::time::Instant::now();
-        let utterance = master_voice_linguistics::phonemize(text, language, overrides)?;
+        self.pending.push_str(text);
+        let ready = if last {
+            std::mem::take(&mut self.pending)
+        } else {
+            let tail = self.pending.split_off(complete_prefix_len(&self.pending));
+            std::mem::replace(&mut self.pending, tail)
+        };
+        if ready.trim().is_empty() {
+            let elapsed = started.elapsed().as_secs_f64() * 1000.0;
+            return Ok((
+                language.unwrap_or(self.default_language),
+                Vec::new(),
+                elapsed,
+            ));
+        }
+        let utterance = master_voice_linguistics::phonemize(&ready, language, overrides)?;
+        let mut phonemes = utterance.phonemes;
+        if !last && !ready.trim_end().ends_with(['.', '!', '?']) {
+            if let Some(tail) = phonemes.last_mut() {
+                if tail.boundary_after == Boundary::Sentence {
+                    tail.boundary_after = Boundary::Word;
+                }
+            }
+        }
         let pos = master_voice_synth::ChunkPos {
             first: self.first,
             last,
         };
-        let frames =
-            master_voice_synth::prosody::build_frames_chunk(&utterance.phonemes, &self.opts, pos);
+        let frames = master_voice_synth::prosody::build_frames_chunk(&phonemes, &self.opts, pos);
         let mut samples = self.renderer.render(&frames);
         master_voice_synth::dsp::post_chain(
             &mut samples,
@@ -271,7 +302,7 @@ mod tests {
         let settings = EngineSettings::from_config(&config);
         let overrides = overrides_from_config(&config);
         let mut stream = StreamSynth::new(&settings);
-        let chunks = ["MASTER", "VOICE", "IS", "ONLINE"];
+        let chunks = ["MASTER ", "VOICE ", "IS ", "ONLINE."];
         let mut previous: Option<f32> = None;
         for (index, text) in chunks.iter().enumerate() {
             let (_, samples, _) = stream
@@ -289,5 +320,67 @@ mod tests {
             }
             previous = samples.last().copied();
         }
+    }
+
+    fn stream_all(chunks: &[String], language: Language, settings: &EngineSettings) -> Vec<f32> {
+        let overrides = Overrides::default();
+        let mut stream = StreamSynth::new(settings);
+        let mut out = Vec::new();
+        for (index, text) in chunks.iter().enumerate() {
+            let (_, samples, _) = stream
+                .chunk(text, Some(language), &overrides, index + 1 == chunks.len())
+                .unwrap();
+            out.extend(samples);
+        }
+        out
+    }
+
+    #[test]
+    fn character_chunks_match_word_chunks() {
+        let config = Config::default();
+        let settings = EngineSettings::from_config(&config);
+        for (text, language) in [
+            ("MASTER VOICE IS ONLINE.", Language::English),
+            ("HELLO, THIS SYSTEM IS READY.", Language::English),
+            ("BONJOUR, LE SYSTÈME EST PRÊT.", Language::French),
+        ] {
+            let by_word: Vec<String> = text
+                .split_inclusive(' ')
+                .map(str::to_string)
+                .collect::<Vec<String>>();
+            let by_char: Vec<String> = text.chars().map(|c| c.to_string()).collect();
+            let word_samples = stream_all(&by_word, language, &settings);
+            let char_samples = stream_all(&by_char, language, &settings);
+            assert!(!word_samples.is_empty(), "{text}: word stream was silent");
+            assert_eq!(
+                word_samples.len(),
+                char_samples.len(),
+                "{text}: chunk granularity changed the sample count"
+            );
+            assert_eq!(
+                word_samples, char_samples,
+                "{text}: chunk granularity changed the audio"
+            );
+        }
+    }
+
+    #[test]
+    fn mid_word_chunks_do_not_spell_letters() {
+        let config = Config::default();
+        let settings = EngineSettings::from_config(&config);
+        let overrides = overrides_from_config(&config);
+        let (_, whole, _) = synthesize_text(
+            "SYSTEM READY.",
+            Some(Language::English),
+            &settings,
+            &overrides,
+        )
+        .unwrap();
+        let split = ["SY".to_string(), "STEM READY.".to_string()];
+        let streamed = stream_all(&split, Language::English, &settings);
+        assert_eq!(
+            whole.samples, streamed,
+            "a mid-word chunk boundary changed the rendered audio"
+        );
     }
 }

@@ -302,7 +302,7 @@ fn is_negative_keyword(word: &str) -> bool {
 /// Phonemize one clause with discontiguous negation ("ne ... pas") pitch
 /// shaping: the weak "ne" dips, intermediate vowels step down per syllable,
 /// and the negative keyword's last vowel falls.
-pub fn phonemize_clause(words: &[&str]) -> Vec<(PhonemeKind, u8, f32)> {
+pub fn phonemize_clause(words: &[&str]) -> Vec<Vec<(PhonemeKind, u8, f32)>> {
     let mut out = Vec::new();
     let mut in_negation = false;
     let mut step = 0u32;
@@ -313,6 +313,7 @@ pub fn phonemize_clause(words: &[&str]) -> Vec<(PhonemeKind, u8, f32)> {
         let ends_negation = in_negation && is_negative_keyword(&lower);
         let phones = phonemize_word(word);
         let last_vowel_idx = phones.iter().rposition(|(k, _)| is_vowel_sound(*k));
+        let mut current = Vec::with_capacity(phones.len());
         for (i, (kind, stress)) in phones.into_iter().enumerate() {
             let mut shift = 0.0;
             if is_vowel_sound(kind) {
@@ -325,7 +326,10 @@ pub fn phonemize_clause(words: &[&str]) -> Vec<(PhonemeKind, u8, f32)> {
                     shift = NEG_NE_SHIFT;
                 }
             }
-            out.push((kind, stress, shift));
+            current.push((kind, stress, shift));
+        }
+        if !current.is_empty() {
+            out.push(current);
         }
         if is_ne {
             in_negation = true;
@@ -1047,9 +1051,13 @@ mod tests {
         assert_eq!(kinds("zut!"), vec![Z, UE, T]);
     }
 
+    fn flat_clause(words: &[&str]) -> Vec<(PhonemeKind, u8, f32)> {
+        phonemize_clause(words).into_iter().flatten().collect()
+    }
+
     #[test]
     fn negation_pitch_shapes() {
-        let clause = phonemize_clause(&["je", "ne", "mange", "pas"]);
+        let clause = flat_clause(&["je", "ne", "mange", "pas"]);
         let vowels: Vec<(PhonemeKind, f32)> = clause
             .iter()
             .filter(|(k, _, _)| is_vowel_sound(*k))
@@ -1063,7 +1071,7 @@ mod tests {
 
     #[test]
     fn negation_resets_after_keyword() {
-        let clause = phonemize_clause(&["ne", "pas", "bonjour"]);
+        let clause = flat_clause(&["ne", "pas", "bonjour"]);
         let vowels: Vec<f32> = clause
             .iter()
             .filter(|(k, _, _)| is_vowel_sound(*k))
@@ -1073,9 +1081,15 @@ mod tests {
     }
 
     #[test]
+    fn clause_groups_one_entry_per_word() {
+        let clause = phonemize_clause(&["je", "ne", "mange", "pas"]);
+        assert_eq!(clause.len(), 4);
+        assert!(clause.iter().all(|word| !word.is_empty()));
+    }
+
+    #[test]
     fn negation_multiword_keyword_falls_on_last_vowel() {
-        let clause = phonemize_clause(&["ne", "personne"]);
-        // personne -> P EH RR S AO N; AO is the last vowel and must fall.
+        let clause = flat_clause(&["ne", "personne"]);
         assert_eq!(clause[6], (AO, 1, -0.15));
     }
 }

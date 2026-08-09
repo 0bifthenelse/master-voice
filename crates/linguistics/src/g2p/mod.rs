@@ -66,7 +66,9 @@ fn flush_fr_clause(out: &mut Vec<Phoneme>, clause: &mut Vec<String>) {
         return;
     }
     let words: Vec<&str> = clause.iter().map(String::as_str).collect();
-    emit_phones(out, fr::phonemize_clause(&words));
+    for word_phones in fr::phonemize_clause(&words) {
+        emit_phones(out, word_phones);
+    }
     clause.clear();
 }
 

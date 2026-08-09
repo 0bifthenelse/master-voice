@@ -32,7 +32,10 @@ pub fn next_chunk(text: &str, first: bool) -> (&str, &str) {
         return ("", "");
     }
     if first {
-        let end = text.find(char::is_whitespace).unwrap_or(text.len());
+        let end = match text.find(char::is_whitespace) {
+            Some(i) => i + text[i..].chars().next().map_or(1, char::len_utf8),
+            None => text.len(),
+        };
         return (&text[..end], &text[end..]);
     }
     let mut len = 0usize;
@@ -45,7 +48,7 @@ pub fn next_chunk(text: &str, first: bool) -> (&str, &str) {
         }
         len += 1;
         if c.is_whitespace() {
-            last_word_end = i;
+            last_word_end = i + c.len_utf8();
         }
         if len > MAX_CHUNK_CHARS {
             if last_word_end > 0 {
@@ -104,8 +107,8 @@ mod tests {
     #[test]
     fn first_chunk_is_first_word() {
         let (chunk, rest) = next_chunk("the system reports", true);
-        assert_eq!(chunk, "the");
-        assert_eq!(rest, " system reports");
+        assert_eq!(chunk, "the ");
+        assert_eq!(rest, "system reports");
         let (chunk2, rest2) = next_chunk(rest, false);
         assert_eq!(chunk2, "system reports");
         assert_eq!(rest2, "");
@@ -125,7 +128,10 @@ mod tests {
         let text = "word ".repeat(100); // 500 chars, words of 5
         let (chunk, rest) = next_chunk(&text, false);
         assert!(chunk.len() <= MAX_CHUNK_CHARS);
-        assert!(chunk.ends_with("word"), "ends on a word boundary");
+        assert!(
+            chunk.trim_end().ends_with("word"),
+            "ends on a word boundary"
+        );
         assert!(!rest.is_empty());
         // All chunks together reconstruct the text (modulo whitespace trim).
         let mut rebuilt = String::new();

@@ -614,6 +614,9 @@ async fn run_producer(
                 language_used = Some(language_new);
             }
             duration_s += samples.len() as f32 / master_voice_synth::params::SAMPLE_RATE as f32;
+            if samples.is_empty() && !chunk_last {
+                continue;
+            }
 
             // Backpressure: keep at most QUEUE_AHEAD chunks queued ahead.
             while !session.cancelled.load(Ordering::SeqCst)
@@ -672,6 +675,52 @@ async fn run_producer(
         }
 
         if pending.trim().is_empty() && closed {
+            let synth_clone = Arc::clone(&synth);
+            let flush_overrides = overrides.clone();
+            let flush_language = language_used;
+            let flushed = tokio::task::spawn_blocking(move || {
+                let mut guard = synth_clone.blocking_lock();
+                guard.chunk("", flush_language, &flush_overrides, true)
+            })
+            .await;
+            if let Ok(Ok((language_new, samples, synth_ms))) = flushed {
+                if language_used.is_none() {
+                    language_used = Some(language_new);
+                }
+                if !samples.is_empty() {
+                    duration_s +=
+                        samples.len() as f32 / master_voice_synth::params::SAMPLE_RATE as f32;
+                    match push_with_retry(
+                        &state,
+                        id,
+                        conn_id,
+                        samples,
+                        !accepted_sent && interrupt,
+                        &session,
+                        &event_tx,
+                    )
+                    .await
+                    {
+                        Some(receiver) => {
+                            if !accepted_sent {
+                                let _ = event_tx
+                                    .send(Event::Accepted {
+                                        id,
+                                        language: language_used
+                                            .unwrap_or(Language::English)
+                                            .code()
+                                            .to_string(),
+                                        duration_s,
+                                        synth_ms,
+                                    })
+                                    .await;
+                            }
+                            final_rx = Some(receiver);
+                        }
+                        None => return,
+                    }
+                }
+            }
             break;
         }
 

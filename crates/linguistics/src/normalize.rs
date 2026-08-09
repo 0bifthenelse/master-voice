@@ -232,17 +232,31 @@ fn classify_number_run(run: &str, lang: Language) -> String {
     run.to_string()
 }
 
-fn push_acronym(out: &mut Vec<String>, word: &str) {
-    let vowels = word
+const INITIALISMS: [&str; 18] = [
+    "AI", "AM", "API", "CPU", "GPU", "GUI", "IDE", "IO", "IP", "OS", "PM", "RAM", "ROM", "UI",
+    "URL", "USB", "UTF", "UX",
+];
+
+fn is_initialism(word: &str) -> bool {
+    let letters: String = word.chars().filter(|c| c.is_ascii_alphabetic()).collect();
+    if letters.is_empty() {
+        return true;
+    }
+    if INITIALISMS.contains(&letters.as_str()) {
+        return true;
+    }
+    !letters
         .chars()
-        .filter(|x| matches!(x, 'A' | 'E' | 'I' | 'O' | 'U' | 'Y'))
-        .count();
-    if word.len() >= 3 && vowels >= 2 {
-        out.push(word.to_lowercase());
-    } else {
+        .any(|c| matches!(c, 'A' | 'E' | 'I' | 'O' | 'U' | 'Y'))
+}
+
+fn push_initialism_or_word(out: &mut Vec<String>, word: &str) {
+    if is_initialism(word) {
         for letter in word.chars().filter(|x| *x != '-') {
             out.push(letter.to_string());
         }
+    } else {
+        out.push(word.to_lowercase());
     }
 }
 
@@ -671,7 +685,7 @@ pub fn normalize_sentence(input: &str, lang: Language, opts: &NormalizeOptions) 
                 .all(|x| x.is_ascii_uppercase() || x == '-' || x.is_ascii_digit())
                 && word.len() >= 2
             {
-                push_acronym(&mut out, &word);
+                push_initialism_or_word(&mut out, &word);
                 continue;
             }
             if word.chars().any(|x| x.is_ascii_digit()) {
@@ -803,7 +817,7 @@ pub fn normalize_sentence(input: &str, lang: Language, opts: &NormalizeOptions) 
             if split.len() > 1 {
                 for part in split {
                     if part.len() >= 2 && part.chars().all(|x| x.is_ascii_uppercase()) {
-                        push_acronym(&mut out, &part);
+                        push_initialism_or_word(&mut out, &part);
                     } else {
                         out.push(part);
                     }

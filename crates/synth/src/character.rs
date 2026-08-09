@@ -53,5 +53,7 @@ pub const PRESENCE_HZ: f32 = 1500.0;
 /// calibration puts fricatives at the vowel peak already; the shelf adds
 /// a gentle lift above the corner without clamping.
 pub const PRESENCE_GAIN: f32 = 0.2;
-/// Fixed make-up gain calibrated so the default corpus stays below 0.75.
-pub const OUT_GAIN: f32 = 0.64;
+/// Fixed make-up gain: the largest 0.01 step whose peak stays clear of the
+/// 0.95 synthesis ceiling across the required corpus at depths 0.0, 0.55,
+/// 0.82 and 1.0 (measured peak 0.9135, zero ceiling hits, min RMS 0.0679).
+pub const OUT_GAIN: f32 = 0.54;

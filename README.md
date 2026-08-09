@@ -83,7 +83,7 @@ language = "auto"            # "fr-FR" | "en-US" | "auto"
 rate = 1.0                   # speech rate multiplier
 pitch = 1.0                  # pitch multiplier
 volume = 1.0                 # output volume multiplier
-robotic_depth = 0.82         # 0.0 = plain speech, 1.0 = full replicant
+robotic_depth = 0.55         # 0.0 = plain speech, 1.0 = full replicant
 device = "default"           # optional output device name (see `master-voice devices`)
 queue_limit = 16             # bounded playback FIFO
 daemon_idle_timeout_secs = 300
@@ -98,6 +98,17 @@ omp_auto_speech = true       # OMP auto-speech master switch (extension reads th
 The playback daemon socket lives at `$XDG_RUNTIME_DIR/master-voice.sock`
 (fallback: temp dir).
 
+### Words versus initialisms
+
+Capitalisation never decides pronunciation. `HELLO`, `SYSTEM`, `MASTER`,
+`BONJOUR` and `VOIX` are spoken as words in any case. A token is spelled out
+letter by letter only when it is a single letter, when it is an explicitly
+classified initialism (`CPU`, `GPU`, `IP`, `API`, `USB`, `URL`, `UTF`, `AM`,
+`PM` and similar), or when it contains no vowel letter at all (`HTML`, `SSH`,
+`PNG`). Every other unknown word goes through the language's G2P fallback
+rather than degenerating into letter names. Use `[overrides]` for anything
+the classifier gets wrong.
+
 ## MCP
 
 `master-voice mcp` exposes one tool:
@@ -110,7 +121,11 @@ speak(text: string, language?: string, interrupt?: boolean,
 Speech starts as soon as the first chunk is synthesized; the call returns as
 soon as playback starts, not when it ends (first response ≈ 5 ms, warm ≈ 1 ms
 for 240 words). Pass the same `stream` key with `final: false` to append text
-word by word into a live, gapless utterance; `final: true` closes the stream.
+into a live, gapless utterance; `final: true` closes the stream. Appends are
+concatenated verbatim, so chunk boundaries never change pronunciation: a
+partial word is buffered until whitespace, punctuation or `final: true`
+arrives, and character-sized appends render byte-identically to word-sized
+ones. Send your own spaces (`"MASTER "`, not `"MASTER"`) to separate words.
 The daemon is warmed at `notifications/initialized`.
 
 Stdio, protocol 2025-03-26; stdout carries protocol frames only; logs go to
