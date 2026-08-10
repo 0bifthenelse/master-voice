@@ -305,6 +305,43 @@ instrument IH1 N S T R AX0 M EH0 N T
 clearly K L IH1 R L IY0
 complete K AX0 M P L IY1 T
 sentence S EH1 N T AX0 N S
+aisle AY1 L
+borough B ER1 OW0
+business B IH1 Z N AX0 S
+choir K W AY1 ER0
+climb K L AY1 M
+comb K OW1 M
+comfortable K AH1 M F T ER0 B AX0 L
+cough K AO1 F
+debt D EH1 T
+different D IH1 F R AX0 N T
+enough IH0 N AH1 F
+general JH EH1 N R AX0 L
+government G AH1 V ER0 N M AX0 N T
+heir EH1 R
+honest AA1 N IH0 S T
+indict IH0 N D AY1 T
+interesting IH1 N T R AX0 S T IH0 NG
+laugh L AE1 F
+library L AY1 B R EH2 R IY0
+national N AE1 SH N AX0 L
+natural N AE1 CH R AX0 L
+necessary N EH1 S AX0 S EH2 R IY0
+probably P R AA1 B AX0 B L IY0
+psychology S AY0 K AA1 L AX0 JH IY0
+receipt R IH0 S IY1 T
+rhythm R IH1 DH AX0 M
+several S EH1 V R AX0 L
+subtle S AH1 T AX0 L
+sword S AO1 R D
+though DH OW1
+thought TH AO1 T
+tomb T UW1 M
+vegetable V EH1 JH T AX0 B AX0 L
+vehicle V IY1 IH0 K AX0 L
+wednesday W EH1 N Z D EY0
+women W IH1 M IH0 N
+yacht Y AA1 T
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
