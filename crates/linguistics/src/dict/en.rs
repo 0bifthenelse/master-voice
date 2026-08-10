@@ -386,6 +386,43 @@ talk T AO1 K
 tough T AH1 F
 walk W AO1 K
 whistle W IH1 S AX0 L
+appear AX0 P IH1 R
+bear B EH1 R
+blood B L AH1 D
+bury B EH1 R IY0
+clear K L IH1 R
+country K AH1 N T R IY0
+couple K AH1 P AX0 L
+dear D IH1 R
+double D AH1 B AX0 L
+ear IH1 R
+early ER1 L IY0
+earn ER1 N
+earth ER1 TH
+fear F IH1 R
+flood F L AH1 D
+funny F AH1 N IY0
+goes G OW1 Z
+gone G AO1 N
+hear HH IH1 R
+heavy HH EH1 V IY0
+honey HH AH1 N IY0
+learn L ER1 N
+live L IH1 V
+money M AH1 N IY0
+monkey M AH1 NG K IY0
+move M UW1 V
+near N IH1 R
+pear P EH1 R
+search S ER1 CH
+stood S T UH1 D
+sunny S AH1 N IY0
+tear T EH1 R
+tongue T AH1 NG
+trouble T R AH1 B AX0 L
+wear W EH1 R
+wood W UH1 D
+young Y AH1 NG
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
