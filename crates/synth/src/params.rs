@@ -11,7 +11,12 @@ pub fn b1(f1: f32, nasal: bool) -> f32 {
     if nasal {
         200.0
     } else {
-        50.0 + 0.06 * f1
+        // 120 Hz floor: a 50+0.06f1 F1 bandwidth (68 Hz at f1=300) makes
+        // the F1 resonator a narrow gate whose -12 dB/oct tail attenuates
+        // the F2/F3 harmonics ~35 dB as they pass the cascade. Real F1
+        // bandwidths are 100-200 Hz; the wider pole keeps the F2 band
+        // alive (D3).
+        120.0 + 0.06 * f1
     }
 }
 pub fn b2(f2: f32) -> f32 {
@@ -83,6 +88,7 @@ const fn vowel(
     base_ms: f32,
     nasal: bool,
     diphthong: bool,
+    amp: f32,
 ) -> PhoneSpec {
     PhoneSpec {
         kind,
@@ -100,7 +106,7 @@ const fn vowel(
         burst_ms: 0.0,
         af: 0.0,
         ah: 0.0,
-        av: 1.0,
+        av: amp,
         fric: [0.0; 4],
         fric_a: [0.0; 4],
     }
@@ -151,6 +157,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         150.0,
         false,
         false,
+        3.8,
     ),
     vowel(
         IH,
@@ -159,6 +166,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         105.0,
         false,
         false,
+        2.0,
     ),
     vowel(
         EH,
@@ -167,6 +175,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         105.0,
         false,
         false,
+        2.1,
     ),
     vowel(
         EY,
@@ -175,6 +184,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         195.0,
         false,
         true,
+        2.3,
     ),
     vowel(
         AE,
@@ -183,6 +193,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         130.0,
         false,
         false,
+        0.9,
     ),
     vowel(
         AA,
@@ -191,6 +202,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         150.0,
         false,
         false,
+        0.9,
     ),
     vowel(
         AH,
@@ -199,6 +211,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         105.0,
         false,
         false,
+        1.1,
     ),
     vowel(
         AO,
@@ -207,6 +220,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         150.0,
         false,
         false,
+        1.0,
     ),
     vowel(
         UH,
@@ -215,6 +229,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         105.0,
         false,
         false,
+        2.1,
     ),
     vowel(
         UW,
@@ -223,6 +238,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         150.0,
         false,
         false,
+        4.2,
     ),
     vowel(
         UX,
@@ -231,6 +247,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         130.0,
         false,
         false,
+        2.3,
     ),
     vowel(
         AX,
@@ -239,6 +256,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         65.0,
         false,
         false,
+        2.2,
     ),
     vowel(
         ER,
@@ -247,6 +265,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         150.0,
         false,
         false,
+        1.4,
     ),
     vowel(
         UE,
@@ -255,6 +274,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         140.0,
         false,
         false,
+        3.0,
     ),
     vowel(
         OE,
@@ -263,6 +283,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         140.0,
         false,
         false,
+        2.1,
     ),
     vowel(
         OEU,
@@ -271,6 +292,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         140.0,
         false,
         false,
+        2.1,
     ),
     vowel(
         EN,
@@ -279,6 +301,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         165.0,
         true,
         false,
+        3.3,
     ),
     vowel(
         AN,
@@ -287,6 +310,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         165.0,
         true,
         false,
+        2.5,
     ),
     vowel(
         ON,
@@ -295,6 +319,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         165.0,
         true,
         false,
+        2.6,
     ),
     vowel(
         UN,
@@ -303,6 +328,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         165.0,
         true,
         false,
+        2.7,
     ),
     vowel(
         EI,
@@ -311,6 +337,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         140.0,
         false,
         false,
+        2.3,
     ),
     vowel(
         AI,
@@ -319,6 +346,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         200.0,
         false,
         true,
+        1.0,
     ),
     vowel(
         OI,
@@ -327,6 +355,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         210.0,
         false,
         true,
+        0.95,
     ),
     vowel(
         OW,
@@ -335,6 +364,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         195.0,
         false,
         true,
+        1.8,
     ),
     vowel(
         AU,
@@ -343,6 +373,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         205.0,
         false,
         true,
+        1.7,
     ),
     vowel(
         IA,
@@ -351,6 +382,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         195.0,
         false,
         true,
+        1.6,
     ),
     vowel(
         EA,
@@ -359,6 +391,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         195.0,
         false,
         true,
+        1.6,
     ),
     vowel(
         UA,
@@ -367,6 +400,7 @@ pub static SPECS: [PhoneSpec; 54] = [
         195.0,
         false,
         true,
+        1.6,
     ),
     // --- Stops ---
     consonant(

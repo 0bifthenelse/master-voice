@@ -627,7 +627,7 @@ pub fn build_frames_chunk(phonemes: &[Phoneme], opts: &SynthOptions, pos: ChunkP
                 ];
                 match (phase_kind, spec.manner) {
                     (PhaseKind::Main, Manner::Vowel | Manner::Diphthong) => {
-                        frame.av = 1.0;
+                        frame.av = spec.av;
                         frame.an = if spec.nasal { 0.6 } else { 0.0 };
                     }
                     (PhaseKind::Main, Manner::Nasal) => {
@@ -636,32 +636,59 @@ pub fn build_frames_chunk(phonemes: &[Phoneme], opts: &SynthOptions, pos: ChunkP
                     }
                     (PhaseKind::Main, _) => {
                         frame.av = spec.av;
-                        frame.af = spec.af;
+                        // Frication levels: the source differencer (tilt
+                        // compensation) cuts voiced energy ~15-20 dB, but
+                        // the parallel noise branch bypasses it; scale the
+                        // noise down so fricatives sit ~10-14 dB below the
+                        // rebalanced vowels instead of above them.
+                        frame.af = spec.af * 0.12;
                         frame.ah = spec.ah;
                         if spec.af > 0.0 {
                             frame.fp = spec.fric;
                             frame.bp = [params::PARALLEL_BW; 4];
-                            frame.ap = spec.fric_a;
-                            frame.ab = 0.25;
+                            frame.ap = [
+                                spec.fric_a[0] * 0.5,
+                                spec.fric_a[1] * 0.5,
+                                spec.fric_a[2] * 0.5,
+                                0.0,
+                            ];
+                            frame.ab = 0.06;
                         }
                     }
-                    (PhaseKind::Closure, _) => {}
+                    (PhaseKind::Closure, _) => {
+                        // Voiced stops keep a low-amplitude voicing bar
+                        // through the closure (formants already at the
+                        // consonant's locus); unvoiced closures stay silent.
+                        if spec.voiced {
+                            frame.av = 0.12;
+                        }
+                    }
                     (PhaseKind::Burst, _) => {
                         frame.av = spec.av;
-                        frame.af = spec.af;
+                        frame.af = spec.af * 0.4;
                         frame.ah = spec.ah;
                         frame.fp = spec.fric;
                         frame.bp = [params::PARALLEL_BW; 4];
-                        frame.ap = spec.fric_a;
-                        frame.ab = 0.25;
+                        frame.ap = [
+                            spec.fric_a[0] * 0.6,
+                            spec.fric_a[1] * 0.6,
+                            spec.fric_a[2] * 0.6,
+                            0.0,
+                        ];
+                        frame.ab = 0.12;
                     }
                     (PhaseKind::Frication, _) => {
                         frame.av = spec.av;
-                        frame.af = spec.af;
+                        frame.af = spec.af * 0.12;
                         frame.fp = spec.fric;
                         frame.bp = [params::PARALLEL_BW; 4];
-                        frame.ap = spec.fric_a;
-                        frame.ab = 0.25;
+                        frame.ap = [
+                            spec.fric_a[0] * 0.5,
+                            spec.fric_a[1] * 0.5,
+                            spec.fric_a[2] * 0.5,
+                            0.0,
+                        ];
+                        frame.ab = 0.06;
                     }
                 }
                 last_formants = (frame.f, frame.bw);

@@ -188,11 +188,15 @@ struct Voice {
     primary: Pulse,
     twin: Pulse,
     tilt: OnePole,
-    /// Source-balance shelf: y = x + GAIN * (x - lp(x, corner)). Flattens
-    /// the pulse's 1/f^3 rolloff above the closure kink so F2/F3 are not
-    /// buried ~25 dB below F1 (V2 measures the imbalance).
+    /// Source-balance shelf: y = x + GAIN * (x - lp(x, corner)). Lifts the
+    /// pulse's 1/f^2 rolloff above the corner so F2/F3 harmonics are not
+    /// buried 25-40 dB below F1 (D3: vowel F2s measured -10..-38 dB).
     shelf: OnePole,
     lcg: Lcg,
+    /// First-order pre-emphasis state: y = x + K*(x - prev). Together with
+    /// the shelf this restores the classic Klatt +6 dB/oct source tilt so
+    /// the upper formants carry the vowel identity.
+    preem_prev: f32,
 }
 
 impl Voice {
@@ -203,6 +207,7 @@ impl Voice {
             tilt: OnePole::new(character::TILT_HZ, sr),
             shelf: OnePole::new(character::SHELF_HZ, sr),
             lcg: Lcg::new(0x9E37_79B9),
+            preem_prev: 0.0,
         }
     }
 
@@ -215,7 +220,10 @@ impl Voice {
         let mut voiced = primary * (1.0 - mix) + twin * mix;
         let lp = self.shelf.tick(voiced);
         voiced += character::SHELF_GAIN * (voiced - lp);
-        self.tilt.tick(voiced)
+        let tilted = self.tilt.tick(voiced);
+        let out = tilted - character::PREEMPH_GAIN * self.preem_prev;
+        self.preem_prev = tilted;
+        out
     }
 }
 
@@ -360,25 +368,35 @@ impl Renderer {
         // Voicing + aspiration into the cascade.
         let voiced = self.voice.tick(sr, f.f0.max(40.0), f.oq, self.depth) * f.av;
         let n = self.noise.next();
-        let aspiration = self.noise_hp.tick(n) * f.ah * 0.35;
+        let aspiration = self.noise_hp.tick(n) * f.ah * 0.20;
         let mut x = voiced + aspiration;
 
         // Nasal pair: pass-through when an == 0, else the nasal pole/zero.
-        // Reset both histories only when crossing the branch boundary so
-        // stale oral/nasal state cannot create a transition transient.
+        // The anti-resonator (zero) pair attenuates everything below its
+        // notch by ~1 - 2r·cos(ω0) + r² (≈ -35 dB for a near-unit-circle
+        // zero at 450 Hz), so routing the whole murmur through it silenced
+        // M/N/NG and the French nasal vowels. The murmur therefore comes
+        // from the pole on the *direct* input, the oral vowel is kept via
+        // the (1 - an) bypass, and the zero is mixed in lightly to shape
+        // the antiformant without starving the murmur band.
         let nasal_active = f.an > 0.0;
         if nasal_active {
-            self.nasal_zero.set(450.0, 300.0, sr);
-            self.nasal_pole.set(270.0, 300.0, sr);
+            self.nasal_zero.set(950.0, 800.0, sr);
+            self.nasal_pole.set(280.0, 400.0, sr);
             if !self.nasal_active {
                 self.nasal_zero.reset_input(x);
+                self.nasal_pole.reset_output(x);
             }
             let z = self.nasal_zero.tick(x);
-            if !self.nasal_active {
-                self.nasal_pole.reset_output(z);
-            }
-            let p = self.nasal_pole.tick(z);
-            x = z * (1.0 - f.an) + p * f.an;
+            let p = self.nasal_pole.tick(x);
+            // Murmur (pole) + direct oral + light antiformant; the
+            // antiformant must never starve the murmur band (the zero's
+            // below-notch shelf would silence it). The differencer cuts
+            // the 250-400 Hz murmur ~20 dB, so the pole path is
+            // re-amplified — strongly for nasal consonants (an=1) and
+            // mildly for nasal vowels (an=0.6), which must not exceed the
+            // oral vowels in level.
+            x = p * f.an * (1.0 + 2.5 * f.an) + x * (1.0 - f.an) + z * 0.35 * f.an * f.an;
         } else {
             if self.nasal_active {
                 self.nasal_zero.reset_input(0.0);

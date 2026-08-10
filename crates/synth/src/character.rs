@@ -37,11 +37,19 @@ pub const OQ_DEPTH: f32 = 0.0;
 /// Source spectral tilt, Hz (one-pole lowpass on the pulse train).
 pub const TILT_HZ: f32 = 3000.0;
 /// Source-balance shelf corner, Hz: y = x + SHELF_GAIN*(x - lp(x)).
-/// Currently unused (gain 0): the OQ-based kink placement balances the
-/// source; the shelf remains as a calibration lever.
+/// Gain 1.0 lifts the pulse's 1/f^2 rolloff above 800 Hz by ~+6 dB so
+/// F2/F3 harmonics reach the resonators strong enough to be heard (D3:
+/// pre-fix vowel F2s were realized -10..-38 dB below F1).
 pub const SHELF_HZ: f32 = 800.0;
 /// Source-balance shelf gain (0 = off).
-pub const SHELF_GAIN: f32 = 0.0;
+pub const SHELF_GAIN: f32 = 1.5;
+/// First-order source pre-emphasis: y = x - K*(x - prev) — a true
+/// +6 dB/oct differencer (the "x + K*(x-prev)" form is only a mild
+/// high-shelf and measured +2 dB at F2 instead of +18). Applies to the
+/// voiced path only (frication/aspiration are unaffected). With the
+/// shelf above it restores the classic Klatt source balance: target
+/// F2s land within -10..-20 dB of F1.
+pub const PREEMPH_GAIN: f32 = 0.97;
 /// Radiation corner, Hz: third-order highpass (18 dB/oct below the
 /// corner). A single differencer (6 dB/oct from DC) leaves the glottal
 /// 1/f region ~25 dB above F2/F3; the extra orders restore the formant
@@ -49,11 +57,15 @@ pub const SHELF_GAIN: f32 = 0.0;
 pub const RAD_HZ: f32 = 250.0;
 /// Consonant presence shelf, Hz (always on, never depth-scaled).
 pub const PRESENCE_HZ: f32 = 1500.0;
-/// Presence shelf gain (≈ +1.7 dB above `PRESENCE_HZ`). The level
+/// Presence shelf gain (≈ +2.8 dB above `PRESENCE_HZ`). The level
 /// calibration puts fricatives at the vowel peak already; the shelf adds
 /// a gentle lift above the corner without clamping.
-pub const PRESENCE_GAIN: f32 = 0.2;
+pub const PRESENCE_GAIN: f32 = 0.35;
 /// Fixed make-up gain: the largest 0.01 step whose peak stays clear of the
 /// 0.95 synthesis ceiling across the required corpus at depths 0.0, 0.55,
-/// 0.82 and 1.0 (measured peak 0.9135, zero ceiling hits, min RMS 0.0679).
-pub const OUT_GAIN: f32 = 0.54;
+/// 0.82 and 1.0. The 2026-08-09 intelligibility pass added the source
+/// differencer (tilt compensation) and per-vowel amplitude equalization,
+/// which rebalanced the vowel spectrum; the old 0.54 made vowels peak at
+/// ~0.20, so the gain moved to 1.0 (worst corpus case: dense-vowel run at
+/// depth 1.0, raw 1.029, post-limiter 0.939, zero ceiling hits).
+pub const OUT_GAIN: f32 = 1.0;
