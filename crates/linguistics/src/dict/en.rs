@@ -171,7 +171,7 @@ stop S T AA1 P
 stopped S T AA1 P T
 system S IH1 S T AX0 M
 systems S IH1 S T AX0 M Z
-synthesis S IH1 N TH AH0 S IH0 S
+synthesis S IH1 N TH AX0 S IH0 S
 degrees D IH0 G R IY1 Z
 take T EY1 K
 temperature T EH1 M P ER0 AH0 CH ER0
@@ -300,6 +300,11 @@ measured M EH1 ZH ER0 D
 moved M UW1 V D
 quiet K W AY1 AX0 T
 voltage V OW1 L T IH0 JH
+across AX0 K R AO1 S
+instrument IH1 N S T R AX0 M EH0 N T
+clearly K L IH1 R L IY0
+complete K AX0 M P L IY1 T
+sentence S EH1 N T AX0 N S
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {

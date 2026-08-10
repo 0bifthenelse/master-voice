@@ -235,7 +235,7 @@ mod tests {
     fn english_corpus_1() {
         assert_eq!(
             phonemes("MASTER voice synthesis is online.", Some(Language::English)),
-            vec![M, AE, S, T, ER, V, OI, S, S, IH, N, TH, AH, S, IH, S, IH, Z, AA, N, L, AI, N]
+            vec![M, AE, S, T, ER, V, OI, S, S, IH, N, TH, AX, S, IH, S, IH, Z, AA, N, L, AI, N]
         );
     }
 

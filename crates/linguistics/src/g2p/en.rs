@@ -923,7 +923,7 @@ mod tests {
         assert_eq!(kinds("master"), vec![M, AE, S, T, ER]);
         assert_eq!(kinds("temperature"), vec![T, EH, M, P, ER, AH, CH, ER]);
         assert_eq!(kinds("degrees"), vec![D, IH, G, R, IY, Z]);
-        assert_eq!(kinds("synthesis"), vec![S, IH, N, TH, AH, S, IH, S]);
+        assert_eq!(kinds("synthesis"), vec![S, IH, N, TH, AX, S, IH, S]);
     }
 
     #[test]
