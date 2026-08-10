@@ -1,12 +1,16 @@
 # master-voice
 
-Offline, Linux-first synthetic speech system in Rust. Robotic but highly
-intelligible voice (Klatt-style formant synthesis, no models, no network, no
-system packages). One engine behind a CLI, an MCP server, and OMP automatic
-speech. Word transitions are smoothed: f0 follows the intonation contour
-continuously across word gaps (no pitch dips) and voiced gaps carry a soft
-voicing tail, so boundaries sound like steps between words rather than
-restarts.
+Offline, Linux-first procedural speech system. The renderer is an original,
+model-free x86-64 GNU assembly source-filter engine: phone timing, continuous
+prosody, coarticulation, glottal and deterministic-noise excitation,
+resonators, robotic character, limiting, and 24 kHz mono PCM emission all run
+from `.ma` source. Rust owns text normalization, language routing, rule-based
+G2P, pronunciation overrides, the public API, daemon, and playback.
+
+The project contains no Piper or Sherpa source or assets, no AI model, no
+recorded voice, and no network synthesis path. Its target is clear,
+characterful procedural speech, not speech indistinguishable from a human
+recording.
 
 Supported languages: **French (fr-FR, first-class)** and **English (en-US)**,
 with automatic per-sentence language routing; when routing is inconclusive
@@ -22,13 +26,13 @@ target/release/master-voice --robotic 0.9 "Full replicant mode."  # 0.0 plain, 1
 target/release/master-voice --output-wav /tmp/out.wav "Save to WAV instead of playing"
 ```
 
-That is the whole system: one binary, no configuration, no network. Language
-routing, pronunciation overrides, the auto-spawned playback daemon and the
-streaming MCP server all work out of the box; the rest of this file is the
-detail. The default character (robotic_depth 0.55) is a semitone-stepped,
-detuned-twin, ring-modulated REPLICANT. Unmistakably synthetic, still
-intelligible. `--robotic` overrides the amount for one call so you can
-audition the range by ear.
+That is the whole runtime system: one binary, no model download and no network.
+Language routing, pronunciation overrides, the auto-spawned playback daemon
+and the streaming MCP server work without a configuration file. The default
+character depth is `0.22`, a subtle reference-inspired detuned and
+ring-modulated layer over the intelligible source-filter core. `--robotic 0`
+selects plain procedural speech; `--robotic 1` selects the full designed
+character.
 
 ## Build
 
@@ -37,8 +41,10 @@ cargo build --workspace --release
 # binary: target/release/master-voice
 ```
 
-Rust stable (rust-version 1.94), crates.io dependencies only. Runtime
-dependencies: an ALSA/PulseAudio/PipeWire output device (via CPAL).
+Build requirements: Linux x86-64, Rust stable (rust-version 1.94), GNU
+binutils (`as` and `ar`), and crates.io dependencies. Runtime playback requires
+an ALSA, PulseAudio, or PipeWire output device through CPAL. WAV rendering does
+not touch an audio device.
 
 ## Install (user, no root)
 
@@ -83,7 +89,7 @@ language = "auto"            # "fr-FR" | "en-US" | "auto"
 rate = 1.0                   # speech rate multiplier
 pitch = 1.0                  # pitch multiplier
 volume = 1.0                 # output volume multiplier
-robotic_depth = 0.55         # 0.0 = plain speech, 1.0 = full replicant
+robotic_depth = 0.22         # 0.0 = plain speech, 1.0 = full character
 device = "default"           # optional output device name (see `master-voice devices`)
 queue_limit = 16             # bounded playback FIFO
 daemon_idle_timeout_secs = 300
@@ -118,15 +124,19 @@ speak(text: string, language?: string, interrupt?: boolean,
       stream?: string, final?: boolean)
 ```
 
-Speech starts as soon as the first chunk is synthesized; the call returns as
-soon as playback starts, not when it ends (first response ≈ 5 ms, warm ≈ 1 ms
-for 240 words). Pass the same `stream` key with `final: false` to append text
-into a live, gapless utterance; `final: true` closes the stream. Appends are
-concatenated verbatim, so chunk boundaries never change pronunciation: a
-partial word is buffered until whitespace, punctuation or `final: true`
-arrives, and character-sized appends render byte-identically to word-sized
-ones. Send your own spaces (`"MASTER "`, not `"MASTER"`) to separate words.
-The daemon is warmed at `notifications/initialized`.
+The first non-final stream chunk waits for four complete words of
+pronunciation context unless terminal punctuation or `final: true` arrives.
+Later chunks retain the existing character and length limits. This prevents
+early words from losing cross-word English pronunciation context while
+bounding startup latency.
+
+Pass the same `stream` key with `final: false` to append text into one live
+utterance; `final: true` closes it. Partial words are buffered until
+whitespace, punctuation, or final input arrives. Assembly state persists
+across every chunk: phase, noise seed, resonators, formant targets, prosodic
+contour, robotic oscillators, and the output join crossfade do not restart.
+Send spaces explicitly (`"MASTER "`, not `"MASTER"`) when appending separate
+words. The daemon is warmed at `notifications/initialized`.
 
 Stdio, protocol 2025-03-26; stdout carries protocol frames only; logs go to
 stderr; `shutdown` exits cleanly, cancelling outstanding speech.
@@ -142,18 +152,25 @@ stderr; `shutdown` exits cleanly, cancelling outstanding speech.
 
 ## Architecture
 
-```
-text → unicode cleanup → sentence split → language routing → per-language
-normalization (numbers, dates, URLs…) → rule-based G2P → pronunciation
-overrides → phonemes → prosody → Klatt formant synthesis → robotic DSP →
-resample → CPAL playback (bounded FIFO, interrupt, one daemon per user)
+```text
+text -> Unicode cleanup -> abbreviation-aware sentence splitting
+     -> per-word language routing -> normalization -> rule-based G2P
+     -> pronunciation overrides -> packed assembly phone ABI
+     -> .ma timing/prosody/source/filter/character/limiter
+     -> 24,000 Hz mono PCM -> CPAL playback or 16-bit WAV
 ```
 
-Crates: `linguistics` (G2P/normalization), `synth` (formant synthesizer),
-`audio` (CPAL + queue), `core` (engine + playback daemon), `mcp` (MCP server),
-`cli` (binary). CLI and MCP are clients of the auto-spawned daemon, which is
-the single playback authority. This gives warm synthesis, cross-process
-interrupt, and clean shutdown.
+Crates: `linguistics` owns normalization, language routing, and G2P; `synth`
+owns the safe Rust FFI and the `.ma` translation unit; `audio` owns CPAL and
+the bounded queue; `core` owns the engine and playback daemon; `mcp` owns the
+MCP server; `cli` owns the binary. No Rust PCM synthesis fallback remains.
+
+Streaming keeps linguistics in Rust and synthesis state in assembly. The
+daemon holds back the first non-final fragment until it has four complete
+words or terminal input, then renders bounded chunks through one persistent
+`SynthState`. CLI and MCP are clients of the single auto-spawned playback
+daemon, providing warm synthesis, cross-process interruption, and clean
+shutdown.
 
 ## Verification
 
@@ -165,16 +182,17 @@ cargo test --workspace
 cargo build --workspace --release
 ```
 
-152 tests: G2P corpora (fr/en), interjections, exclamation boundaries,
-discontiguous French negation pitch shaping, normalization, numbers,
-sentence boundaries, overrides, synthesis determinism, resonator state
-(V1), chunked render bit-identity (V4), formant spectrum (V2/V3),
-word-gap f0/voicing continuity, queue semantics, stream chunking,
-shell-safety battery (no input text can execute), MCP protocol
-end-to-end, CLI behaviors.
+The workspace suite covers fixed French, English, and mixed-language
+pronunciation corpora; unknown override errors; all 54 packed phone mappings;
+ABI rejection and output canaries; finite bounded output; absence of
+flat-topping; phone-level audibility; formant realization; F0 and question
+contours; spectral tilt; deterministic one-shot and streaming rendering;
+sub-0.02 chunk joins; queue semantics; shell safety; MCP protocol behavior;
+and CLI behavior.
 
 ## License
 
 Code: MIT. See [LICENCE.md](LICENCE.md) for the included license text. All
-dependencies are permissively licensed (no
-GPL/AGPL). No model or data licenses apply. No external data is used.
+dependencies are permissively licensed; no GPL or AGPL dependency is included.
+No model, recorded-voice, or external data license applies. The synthesis
+implementation is original and copies no Piper or Sherpa source or asset.

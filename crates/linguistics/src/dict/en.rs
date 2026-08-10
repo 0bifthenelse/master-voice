@@ -138,6 +138,14 @@ point P OY1 N T
 points P OY1 N T S
 postgres P OW1 S T G R EH2 S
 put P UH1 T
+colonel K ER1 N AX0 L
+knight N AY1 T
+knows N OW1 Z
+meeting M IY1 T IH0 NG
+ready R EH1 D IY0
+mr M IH1 S T ER0
+record R EH1 K ER0 D
+schedule S K EH1 JH UW0 L
 read R IY1 D
 really R IH1 L IY0
 repository R IH0 P AA1 Z AH0 T AO2 R IY0

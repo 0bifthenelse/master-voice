@@ -3,6 +3,7 @@ use crate::phoneme::PhonemeKind::{self, *};
 const DICT_FR: &[(&str, &[PhonemeKind])] = &[
     ("aujourd'hui", &[OW, ZH, UW, RR, D, UE, IY]),
     ("monsieur", &[M, AX, S, Y, OE]),
+    ("beaucoup", &[B, OW, K, UW]),
     ("madame", &[M, AA, D, AA, M]),
     ("mademoiselle", &[M, AA, D, M, W, AA, Z, EH, L]),
     ("messieurs", &[M, EH, S, Y, OE]),
@@ -109,12 +110,25 @@ const DICT_FR: &[(&str, &[PhonemeKind])] = &[
     ("ahem", &[AA, EH, M]),
 ];
 
-fn lookup(word: &str) -> Option<Vec<PhonemeKind>> {
+pub(crate) fn lookup(word: &str) -> Option<Vec<PhonemeKind>> {
     let lower = word.to_lowercase();
     DICT_FR
         .iter()
         .find(|(w, _)| *w == lower)
         .map(|(_, phones)| phones.to_vec())
+}
+
+pub(crate) fn has_dictionary_word(word: &str) -> bool {
+    lookup(word).is_some()
+}
+
+fn with_final_nucleus(phones: Vec<PhonemeKind>) -> Vec<(PhonemeKind, u8)> {
+    let last_vowel = phones.iter().rposition(|kind| is_vowel_sound(*kind));
+    phones
+        .into_iter()
+        .enumerate()
+        .map(|(index, kind)| (kind, u8::from(Some(index) == last_vowel)))
+        .collect()
 }
 
 fn spell_letter_fr(c: char) -> Vec<PhonemeKind> {
@@ -216,7 +230,7 @@ pub fn phonemize_word(word: &str) -> Vec<(PhonemeKind, u8)> {
             .collect();
     }
     if let Some(phones) = lookup(&lower) {
-        return phones.into_iter().map(|k| (k, 0)).collect();
+        return with_final_nucleus(phones);
     }
     if lower.contains('-') && !lower.starts_with("aujourd") {
         let parts: Vec<&str> = lower.split('-').collect();
@@ -299,6 +313,57 @@ fn is_negative_keyword(word: &str) -> bool {
     NEGATIVE_KEYWORDS.contains(&word)
 }
 
+const ASPIRED_H: &[&str] = &[
+    "hache", "haine", "hall", "haricot", "hasard", "haut", "héros", "hibou", "hockey", "honte",
+];
+
+fn begins_vowel_or_mute_h(word: &str) -> bool {
+    let lower = strip_punct(word).to_lowercase();
+    let Some(first) = lower.chars().next() else {
+        return false;
+    };
+    matches!(
+        first,
+        'a' | 'e'
+            | 'i'
+            | 'o'
+            | 'u'
+            | 'y'
+            | 'à'
+            | 'â'
+            | 'ä'
+            | 'é'
+            | 'è'
+            | 'ê'
+            | 'ë'
+            | 'î'
+            | 'ï'
+            | 'ô'
+            | 'ö'
+            | 'ù'
+            | 'û'
+            | 'ü'
+            | 'œ'
+    ) || first == 'h' && !ASPIRED_H.contains(&lower.as_str())
+}
+
+fn liaison_kind(word: &str) -> Option<PhonemeKind> {
+    match word {
+        "les" | "des" | "mes" | "tes" | "ses" | "nos" | "vos" => Some(Z),
+        "un" => Some(N),
+        _ if word.ends_with("'un") => Some(N),
+        _ => None,
+    }
+}
+
+fn electrical_context(word: &str) -> bool {
+    [
+        "électr", "electr", "câbl", "cabl", "cuivre", "conduct", "métall", "metall", "fil",
+    ]
+    .iter()
+    .any(|prefix| word.starts_with(prefix))
+}
+
 /// Phonemize one clause with discontiguous negation ("ne ... pas") pitch
 /// shaping: the weak "ne" dips, intermediate vowels step down per syllable,
 /// and the negative keyword's last vowel falls.
@@ -306,12 +371,25 @@ pub fn phonemize_clause(words: &[&str]) -> Vec<Vec<(PhonemeKind, u8, f32)>> {
     let mut out = Vec::new();
     let mut in_negation = false;
     let mut step = 0u32;
-    for raw in words {
+    for (word_index, raw) in words.iter().enumerate() {
         let word = strip_punct(raw);
         let lower = word.to_lowercase();
+        let next_lower = words
+            .get(word_index + 1)
+            .map(|next| strip_punct(next).to_lowercase());
         let is_ne = is_ne_word(&lower);
         let ends_negation = in_negation && is_negative_keyword(&lower);
-        let phones = phonemize_word(word);
+        let mut phones = if lower == "fils" && next_lower.as_deref().is_some_and(electrical_context)
+        {
+            vec![(F, 0), (IY, 1), (L, 0)]
+        } else {
+            phonemize_word(word)
+        };
+        if next_lower.as_deref().is_some_and(begins_vowel_or_mute_h) {
+            if let Some(kind) = liaison_kind(&lower) {
+                phones.push((kind, 0));
+            }
+        }
         let last_vowel_idx = phones.iter().rposition(|(k, _)| is_vowel_sound(*k));
         let mut current = Vec::with_capacity(phones.len());
         for (i, (kind, stress)) in phones.into_iter().enumerate() {
@@ -996,7 +1074,7 @@ mod tests {
 
     #[test]
     fn j_elision_is_zh() {
-        // "j'ai" = /ʒɛ/ — the elided j is ZH (the 'ai' vowel is the
+        // "j'ai" = /ʒɛ/: the elided j is ZH (the 'ai' vowel is the
         // codebase's regular /ɛ/ mapping, not /e/).
         assert_eq!(kinds("j'ai"), vec![ZH, EH]);
     }

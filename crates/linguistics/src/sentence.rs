@@ -5,6 +5,20 @@ pub struct Sentence {
     pub boundary: Boundary,
 }
 
+fn is_abbreviation(text: &str) -> bool {
+    let token = text
+        .split_whitespace()
+        .next_back()
+        .unwrap_or_default()
+        .trim_matches(['"', '\'', '(', '[', '«']);
+    token.len() == 1 && token.as_bytes()[0].is_ascii_alphabetic()
+        || [
+            "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "etc", "mme", "mlle", "m",
+        ]
+        .iter()
+        .any(|abbreviation| token.eq_ignore_ascii_case(abbreviation))
+}
+
 pub fn split_sentences(input: &str) -> Vec<Sentence> {
     let mut out = Vec::new();
     let mut current = String::new();
@@ -19,7 +33,7 @@ pub fn split_sentences(input: &str) -> Vec<Sentence> {
             '.' => {
                 let prev_digit = prev_char.is_some_and(is_numberish);
                 let next_digit = next_char.is_some_and(is_numberish);
-                !(prev_digit && next_digit)
+                !(is_abbreviation(&current) || prev_digit && next_digit)
             }
             '!' | '?' | ';' => true,
             ',' | ':' => {
@@ -27,7 +41,7 @@ pub fn split_sentences(input: &str) -> Vec<Sentence> {
                 let next_digit = next_char.is_some_and(is_numberish);
                 !(prev_digit && next_digit)
             }
-            '\n' | '—' => true,
+            '\n' | '\u{2014}' => true,
             _ => false,
         };
 
@@ -128,10 +142,11 @@ mod tests {
     }
 
     #[test]
-    fn abbreviation_dots_keep_text() {
-        let sentences = split_sentences("Mr. Smith arrives.");
-        assert_eq!(sentences[0].text, "Mr.");
-        assert_eq!(sentences[1].text, "Smith arrives.");
+    fn abbreviation_dots_do_not_split_names() {
+        let sentences = split_sentences("Mr. Smith arrives. Dr. Jones agrees.");
+        assert_eq!(sentences.len(), 2);
+        assert_eq!(sentences[0].text, "Mr. Smith arrives.");
+        assert_eq!(sentences[1].text, "Dr. Jones agrees.");
     }
 
     #[test]

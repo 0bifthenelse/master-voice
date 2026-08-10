@@ -126,11 +126,24 @@ pub fn phonemize_tokens(tokens: &[Token], lang: Language, overrides: &Overrides)
                     Token::Word(w) => w.chars().next(),
                     Token::Boundary(_) => None,
                 });
+                let previous = tokens[..idx].iter().rev().find_map(|token| match token {
+                    Token::Word(word) => Some(word.as_str()),
+                    Token::Boundary(_) => None,
+                });
+                let past_context = tokens.iter().enumerate().any(|(cue_index, token)| {
+                    cue_index.abs_diff(idx) <= 3
+                        && matches!(
+                            token,
+                            Token::Word(word)
+                                if ["yesterday", "ago", "earlier", "previously", "last"]
+                                    .contains(&word.to_ascii_lowercase().as_str())
+                        )
+                });
                 let phones: Vec<(PhonemeKind, u8)> =
                     if let Some(override_phones) = apply_word_override(word, overrides) {
                         override_phones
                     } else {
-                        en::phonemize_word(word, next_first)
+                        en::phonemize_word_context(word, previous, next_first, past_context)
                     };
                 emit_phones(&mut out, phones.into_iter().map(|(k, s)| (k, s, 0.0)));
             }

@@ -11,8 +11,16 @@ pub mod unicode;
 use lang::Language;
 use phoneme::Phoneme;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LanguageSpan {
+    pub language: Language,
+    pub word_start: usize,
+    pub word_end: usize,
+}
+
 pub struct Utterance {
     pub language: Language,
+    pub language_spans: Vec<LanguageSpan>,
     pub phonemes: Vec<Phoneme>,
     pub source_text: String,
 }
@@ -21,6 +29,8 @@ pub struct Utterance {
 pub enum LingError {
     #[error("no speakable text")]
     EmptyInput,
+    #[error("pronunciation override for '{word}' contains unknown phone symbol '{symbol}'")]
+    UnknownOverridePhoneSymbol { word: String, symbol: String },
 }
 
 pub fn phonemize(
@@ -28,26 +38,72 @@ pub fn phonemize(
     language: Option<Language>,
     overrides: &overrides::Overrides,
 ) -> Result<Utterance, LingError> {
+    if let Some((word, symbol)) = overrides.first_parse_error() {
+        return Err(LingError::UnknownOverridePhoneSymbol {
+            word: word.to_string(),
+            symbol: symbol.to_string(),
+        });
+    }
     let opts = normalize::NormalizeOptions::default();
     let sentences = sentence::split_sentences(text);
     let mut all: Vec<Phoneme> = Vec::new();
-    let mut lang_used = language.unwrap_or(Language::French);
-    for s in &sentences {
-        let lang = language.unwrap_or_else(|| lang::detect(&s.text).unwrap_or(Language::French));
-        lang_used = lang;
-        let normalized = normalize::normalize_sentence(&s.text, lang, &opts);
-        let tokens = g2p::tokenize(&normalized);
-        let mut phones = g2p::phonemize_tokens(&tokens, lang, overrides);
-        if let Some(last) = phones.last_mut() {
-            last.boundary_after = s.boundary;
+    let mut language_spans: Vec<LanguageSpan> = Vec::new();
+    let mut first_language = language;
+    let mut word_cursor = 0usize;
+    for sentence in &sentences {
+        let words: Vec<&str> = sentence.text.split_whitespace().collect();
+        if words.is_empty() {
+            continue;
         }
-        all.extend(phones);
+        let routes = match language {
+            Some(language) => vec![language; words.len()],
+            None => lang::route_words(&words),
+        };
+        if first_language.is_none() {
+            first_language = routes.first().copied();
+        }
+        let mut start = 0usize;
+        while start < words.len() {
+            let span_language = routes[start];
+            let mut end = start + 1;
+            while end < words.len() && routes[end] == span_language {
+                end += 1;
+            }
+            let span_text = words[start..end].join(" ");
+            let normalized = normalize::normalize_sentence(&span_text, span_language, &opts);
+            let tokens = g2p::tokenize(&normalized);
+            let mut phones = g2p::phonemize_tokens(&tokens, span_language, overrides);
+            if let Some(last) = phones.last_mut() {
+                last.boundary_after = phoneme::Boundary::Word;
+            }
+            all.extend(phones);
+            let span = LanguageSpan {
+                language: span_language,
+                word_start: word_cursor + start,
+                word_end: word_cursor + end,
+            };
+            if let Some(previous) = language_spans.last_mut() {
+                if previous.language == span.language && previous.word_end == span.word_start {
+                    previous.word_end = span.word_end;
+                } else {
+                    language_spans.push(span);
+                }
+            } else {
+                language_spans.push(span);
+            }
+            start = end;
+        }
+        if let Some(last) = all.last_mut() {
+            last.boundary_after = sentence.boundary;
+        }
+        word_cursor += words.len();
     }
     if all.is_empty() {
         return Err(LingError::EmptyInput);
     }
     Ok(Utterance {
-        language: lang_used,
+        language: first_language.unwrap_or(Language::French),
+        language_spans,
         phonemes: all,
         source_text: text.to_string(),
     })

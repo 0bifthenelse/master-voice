@@ -5,9 +5,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Notify};
 
-/// First chunk of an utterance: the first word only — that is what makes
-/// speech start instantly.
-pub const FIRST_CHUNK_WORDS: usize = 1;
+/// First chunk of an utterance: hold for four words so assembly receives
+/// enough context for a phrase contour.
+pub const FIRST_CHUNK_WORDS: usize = 4;
 /// Later chunks: longest run of whole words under this many characters.
 pub const MAX_CHUNK_CHARS: usize = 120;
 /// Chunks queued ahead of the speaker before the producer backpressures.
@@ -22,21 +22,44 @@ fn is_segment_boundary(c: char) -> bool {
     matches!(c, '.' | '?' | '!' | ';' | ':' | ',' | '\n')
 }
 
-/// Take the next chunk from `text`. `first` takes only the first word;
-/// later chunks are the longest run of whole words that stays under
-/// `MAX_CHUNK_CHARS` and never crosses a segment boundary (a short segment
-/// is one chunk). Returns `(chunk, rest)`; both may be empty.
-pub fn next_chunk(text: &str, first: bool) -> (&str, &str) {
+/// Take the next chunk from `text`. A non-final first chunk waits for four
+/// words unless terminal punctuation arrives; every chunk respects
+/// `MAX_CHUNK_CHARS` and segment boundaries. Returns `(chunk, rest)`.
+pub fn next_chunk(text: &str, first: bool, last: bool) -> (&str, &str) {
     let text = text.trim_start();
     if text.is_empty() {
         return ("", "");
     }
-    if first {
-        let end = match text.find(char::is_whitespace) {
-            Some(i) => i + text[i..].chars().next().map_or(1, char::len_utf8),
-            None => text.len(),
+    if first && !last {
+        let mut words = 0usize;
+        let mut in_word = false;
+        let mut len = 0usize;
+        let mut last_word_end = 0usize;
+        for (i, c) in text.char_indices() {
+            if is_segment_boundary(c) {
+                let end = i + c.len_utf8();
+                return (&text[..end], &text[end..]);
+            }
+            len += 1;
+            if c.is_whitespace() {
+                in_word = false;
+                last_word_end = i + c.len_utf8();
+                if words >= FIRST_CHUNK_WORDS {
+                    return (&text[..last_word_end], &text[last_word_end..]);
+                }
+            } else if !in_word {
+                words += 1;
+                in_word = true;
+            }
+            if len > MAX_CHUNK_CHARS && last_word_end > 0 {
+                return (&text[..last_word_end], &text[last_word_end..]);
+            }
+        }
+        return if words >= FIRST_CHUNK_WORDS {
+            (text, "")
+        } else {
+            ("", text)
         };
-        return (&text[..end], &text[end..]);
     }
     let mut len = 0usize;
     let mut last_word_end = 0usize;
@@ -105,28 +128,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn first_chunk_is_first_word() {
-        let (chunk, rest) = next_chunk("the system reports", true);
-        assert_eq!(chunk, "the ");
-        assert_eq!(rest, "system reports");
-        let (chunk2, rest2) = next_chunk(rest, false);
-        assert_eq!(chunk2, "system reports");
-        assert_eq!(rest2, "");
+    fn first_chunk_waits_for_context_or_terminal_input() {
+        assert_eq!(
+            next_chunk("the system reports", true, false),
+            ("", "the system reports")
+        );
+        let (chunk, rest) = next_chunk("the system reports nominal now", true, false);
+        assert_eq!(chunk, "the system reports nominal ");
+        assert_eq!(rest, "now");
+        assert_eq!(next_chunk("ready.", true, false), ("ready.", ""));
+        assert_eq!(
+            next_chunk("short final input", true, true),
+            ("short final input", "")
+        );
     }
 
     #[test]
     fn chunk_never_crosses_segment_boundary() {
         let text = "one two three. four five six seven eight";
-        let (chunk, rest) = next_chunk(text, false);
+        let (chunk, rest) = next_chunk(text, false, false);
         assert_eq!(chunk, "one two three.");
-        let (chunk2, _) = next_chunk(rest, false);
+        let (chunk2, _) = next_chunk(rest, false, false);
         assert_eq!(chunk2, "four five six seven eight");
     }
 
     #[test]
     fn chunk_respects_char_cap() {
         let text = "word ".repeat(100); // 500 chars, words of 5
-        let (chunk, rest) = next_chunk(&text, false);
+        let (chunk, rest) = next_chunk(&text, false, false);
         assert!(chunk.len() <= MAX_CHUNK_CHARS);
         assert!(
             chunk.trim_end().ends_with("word"),
@@ -138,7 +167,7 @@ mod tests {
         let mut remaining = text.as_str();
         let first = false;
         while !remaining.trim().is_empty() {
-            let (c, r) = next_chunk(remaining, first);
+            let (c, r) = next_chunk(remaining, first, false);
             rebuilt.push_str(c);
             rebuilt.push(' ');
             remaining = r;
@@ -151,14 +180,14 @@ mod tests {
     fn long_single_word_taken_whole() {
         let long_word = "x".repeat(200);
         let text = format!("{long_word} and more");
-        let (chunk, rest) = next_chunk(&text, false);
+        let (chunk, rest) = next_chunk(&text, false, false);
         assert_eq!(chunk, long_word);
         assert!(rest.contains("and more"));
     }
 
     #[test]
     fn empty_and_whitespace() {
-        assert_eq!(next_chunk("", true), ("", ""));
-        assert_eq!(next_chunk("   ", false), ("", ""));
+        assert_eq!(next_chunk("", true, false), ("", ""));
+        assert_eq!(next_chunk("   ", false, false), ("", ""));
     }
 }

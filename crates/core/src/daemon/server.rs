@@ -119,7 +119,11 @@ async fn idle_wait(state: &State) {
         let deadline = *state.last_activity.lock() + state.config.idle_timeout;
         let now = Instant::now();
         if now >= deadline {
-            return;
+            if state.active.lock().is_empty() {
+                return;
+            }
+            *state.last_activity.lock() = now;
+            continue;
         }
         tokio::time::sleep(deadline - now).await;
         if state.shutting_down.load(Ordering::SeqCst) {
@@ -497,7 +501,7 @@ async fn start_stream(
 
     // The word-append contract: every stream call (start or append)
     // answers `Queued` as soon as the text is accepted. One-shot
-    // utterances never see it — their clients wait for `Done`.
+    // utterances never see it; their clients wait for `Done`.
     if stream_key.is_some() {
         let _ = event_tx.send(Event::Queued { id }).await;
     }
@@ -549,14 +553,16 @@ async fn run_producer(
         }
 
         // Produce chunks while text is available.
+        let mut needs_context = false;
 
         while !pending.trim().is_empty() && !session.cancelled.load(Ordering::SeqCst) {
-            let (chunk, rest) = stream::next_chunk(&pending, first);
+            let (chunk, rest) = stream::next_chunk(&pending, first, closed);
             let chunk_owned = chunk.to_string();
             let rest_owned = rest.to_string();
             if chunk_owned.trim().is_empty() {
                 pending = rest_owned;
-                continue;
+                needs_context = true;
+                break;
             }
             pending = rest_owned;
             let chunk_text = chunk_owned;
@@ -595,7 +601,7 @@ async fn run_producer(
                     }
                 },
             };
-            let (language_new, samples, synth_ms) = match synth_result {
+            let (language_new, buffer, synth_ms) = match synth_result {
                 Ok(v) => v,
                 Err(e) => {
                     let code = e.exit_code();
@@ -613,8 +619,8 @@ async fn run_producer(
             if language_used.is_none() {
                 language_used = Some(language_new);
             }
-            duration_s += samples.len() as f32 / master_voice_synth::params::SAMPLE_RATE as f32;
-            if samples.is_empty() && !chunk_last {
+            duration_s += buffer.samples.len() as f32 / buffer.sample_rate as f32;
+            if buffer.samples.is_empty() && !chunk_last {
                 continue;
             }
 
@@ -638,7 +644,7 @@ async fn run_producer(
                 &state,
                 id,
                 conn_id,
-                samples,
+                buffer,
                 chunk_first && interrupt,
                 &session,
                 &event_tx,
@@ -646,7 +652,10 @@ async fn run_producer(
             .await
             {
                 Some(receiver) => receiver,
-                None => return,
+                None => {
+                    unregister_utterance(id, &state, &session);
+                    return;
+                }
             };
 
             if !accepted_sent {
@@ -683,18 +692,17 @@ async fn run_producer(
                 guard.chunk("", flush_language, &flush_overrides, true)
             })
             .await;
-            if let Ok(Ok((language_new, samples, synth_ms))) = flushed {
+            if let Ok(Ok((language_new, buffer, synth_ms))) = flushed {
                 if language_used.is_none() {
                     language_used = Some(language_new);
                 }
-                if !samples.is_empty() {
-                    duration_s +=
-                        samples.len() as f32 / master_voice_synth::params::SAMPLE_RATE as f32;
+                if !buffer.samples.is_empty() {
+                    duration_s += buffer.samples.len() as f32 / buffer.sample_rate as f32;
                     match push_with_retry(
                         &state,
                         id,
                         conn_id,
-                        samples,
+                        buffer,
                         !accepted_sent && interrupt,
                         &session,
                         &event_tx,
@@ -717,20 +725,23 @@ async fn run_producer(
                             }
                             final_rx = Some(receiver);
                         }
-                        None => return,
+                        None => {
+                            unregister_utterance(id, &state, &session);
+                            return;
+                        }
                     }
                 }
             }
             break;
         }
 
-        if !pending.trim().is_empty() {
-            // More text to chunk: loop back to the producer.
+        if !pending.trim().is_empty() && !needs_context {
+            // More text can be chunked without waiting for input.
             continue;
         }
 
-        // Pending is empty and the stream is still open: wait for input,
-        // stream close, idle finalize, or cancel.
+        // Wait for enough first-chunk context, stream close, idle finalize,
+        // or cancellation.
         match &mut text_rx {
             None => break,
             Some(rx) => {
@@ -766,7 +777,7 @@ async fn push_with_retry(
     state: &State,
     id: u64,
     conn_id: u64,
-    samples: Vec<f32>,
+    buffer: master_voice_synth::AudioBuffer,
     interrupt: bool,
     session: &Arc<StreamSession>,
     event_tx: &mpsc::Sender<Event>,
@@ -776,8 +787,8 @@ async fn push_with_retry(
             state,
             id,
             conn_id,
-            samples.clone(),
-            master_voice_synth::params::SAMPLE_RATE,
+            buffer.samples.clone(),
+            buffer.sample_rate,
             interrupt && attempt == 0,
         ) {
             Ok(receiver) => return Some(receiver),
@@ -846,6 +857,16 @@ async fn poll_final(
     }
 }
 
+fn unregister_utterance(id: u64, state: &State, session: &StreamSession) {
+    state.active.lock().remove(&id);
+    if let Some(key) = &session.stream_key {
+        let mut streams = state.streams.lock();
+        if streams.get(key) == Some(&id) {
+            streams.remove(key);
+        }
+    }
+}
+
 /// Unregister the utterance and emit `Done` (unless the producer already
 /// sent an error; `done_status` overrides the cancellation-derived one).
 async fn finish(
@@ -855,13 +876,7 @@ async fn finish(
     done_status: Option<String>,
     event_tx: mpsc::Sender<Event>,
 ) {
-    state.active.lock().remove(&id);
-    if let Some(key) = &session.stream_key {
-        let mut streams = state.streams.lock();
-        if streams.get(key) == Some(&id) {
-            streams.remove(key);
-        }
-    }
+    unregister_utterance(id, state, session);
     let status = done_status.unwrap_or_else(|| {
         if session.cancelled.load(Ordering::SeqCst) {
             "interrupted".to_string()

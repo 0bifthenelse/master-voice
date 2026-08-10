@@ -37,7 +37,7 @@ impl EngineSettings {
             volume: config.volume.unwrap_or(1.0).clamp(0.0, 2.0),
             robotic_depth: config
                 .robotic_depth
-                .unwrap_or(master_voice_synth::character::DEFAULT_ROBOTIC_DEPTH)
+                .unwrap_or(master_voice_synth::DEFAULT_ROBOTIC_DEPTH)
                 .clamp(0.0, 1.0),
         }
     }
@@ -85,8 +85,7 @@ fn complete_prefix_len(text: &str) -> usize {
 }
 
 pub struct StreamSynth {
-    renderer: master_voice_synth::klatt::Renderer,
-    post: master_voice_synth::dsp::PostState,
+    state: master_voice_synth::SynthState,
     opts: SynthOptions,
     pending: String,
     default_language: Language,
@@ -95,11 +94,9 @@ pub struct StreamSynth {
 
 impl StreamSynth {
     pub fn new(settings: &EngineSettings) -> Self {
-        let opts = settings.synth_options();
         Self {
-            renderer: master_voice_synth::klatt::Renderer::new(opts.robotic_depth),
-            post: master_voice_synth::dsp::PostState::default(),
-            opts,
+            state: master_voice_synth::SynthState::new(),
+            opts: settings.synth_options(),
             pending: String::new(),
             default_language: settings.language.unwrap_or(Language::French),
             first: true,
@@ -112,7 +109,7 @@ impl StreamSynth {
         language: Option<Language>,
         overrides: &Overrides,
         last: bool,
-    ) -> Result<(Language, Vec<f32>, f64), Error> {
+    ) -> Result<(Language, master_voice_synth::AudioBuffer, f64), Error> {
         let started = std::time::Instant::now();
         self.pending.push_str(text);
         let ready = if last {
@@ -125,7 +122,10 @@ impl StreamSynth {
             let elapsed = started.elapsed().as_secs_f64() * 1000.0;
             return Ok((
                 language.unwrap_or(self.default_language),
-                Vec::new(),
+                master_voice_synth::AudioBuffer {
+                    samples: Vec::new(),
+                    sample_rate: master_voice_synth::SAMPLE_RATE,
+                },
                 elapsed,
             ));
         }
@@ -142,18 +142,10 @@ impl StreamSynth {
             first: self.first,
             last,
         };
-        let frames = master_voice_synth::prosody::build_frames_chunk(&phonemes, &self.opts, pos);
-        let mut samples = self.renderer.render(&frames);
-        master_voice_synth::dsp::post_chain(
-            &mut samples,
-            self.opts.robotic_depth,
-            self.opts.volume,
-            &mut self.post,
-            pos,
-        );
+        let buffer = master_voice_synth::render_chunk(&mut self.state, &phonemes, &self.opts, pos);
         self.first = false;
         let elapsed = started.elapsed().as_secs_f64() * 1000.0;
-        Ok((utterance.language, samples, elapsed))
+        Ok((utterance.language, buffer, elapsed))
     }
 }
 
@@ -186,7 +178,7 @@ mod tests {
         assert_eq!(settings.rate, 1.0);
         assert_eq!(
             settings.robotic_depth,
-            master_voice_synth::character::DEFAULT_ROBOTIC_DEPTH
+            master_voice_synth::DEFAULT_ROBOTIC_DEPTH
         );
         assert_eq!(settings.language, None);
     }
@@ -293,7 +285,7 @@ mod tests {
                 true,
             )
             .unwrap();
-        assert_eq!(whole.samples, chunk);
+        assert_eq!(whole.samples, chunk.samples);
     }
 
     #[test]
@@ -305,7 +297,7 @@ mod tests {
         let chunks = ["MASTER ", "VOICE ", "IS ", "ONLINE."];
         let mut previous: Option<f32> = None;
         for (index, text) in chunks.iter().enumerate() {
-            let (_, samples, _) = stream
+            let (_, buffer, _) = stream
                 .chunk(
                     text,
                     Some(Language::English),
@@ -313,12 +305,12 @@ mod tests {
                     index + 1 == chunks.len(),
                 )
                 .unwrap();
-            assert_safe(&samples, text);
+            assert_safe(&buffer.samples, text);
             if let Some(previous) = previous {
-                let delta = (samples[0] - previous).abs();
-                assert!(delta < 0.25, "{text}: boundary delta={delta}");
+                let delta = (buffer.samples[0] - previous).abs();
+                assert!(delta < 0.02, "{text}: boundary delta={delta}");
             }
-            previous = samples.last().copied();
+            previous = buffer.samples.last().copied();
         }
     }
 
@@ -327,10 +319,10 @@ mod tests {
         let mut stream = StreamSynth::new(settings);
         let mut out = Vec::new();
         for (index, text) in chunks.iter().enumerate() {
-            let (_, samples, _) = stream
+            let (_, buffer, _) = stream
                 .chunk(text, Some(language), &overrides, index + 1 == chunks.len())
                 .unwrap();
-            out.extend(samples);
+            out.extend(buffer.samples);
         }
         out
     }

@@ -1,6 +1,7 @@
 mod common;
 
 use common::TestEnv;
+use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 
 const DANGEROUS: [&str; 9] = [
@@ -63,7 +64,6 @@ fn command_substitution_marker_stays_absent() {
 #[test]
 fn no_child_processes_besides_daemon() {
     let env = TestEnv::new();
-    let before = count_procs();
     let output = env.run(&["--language", "en-US", "safe"]);
     assert!(
         output.status.code() == Some(0) || output.status.code() == Some(5),
@@ -71,25 +71,45 @@ fn no_child_processes_besides_daemon() {
         output.status.code()
     );
     std::thread::sleep(std::time::Duration::from_millis(300));
-    let after = count_procs();
+    let processes = runtime_processes(&env.runtime_dir);
     assert!(
-        after <= before + 2,
-        "suspicious process growth: {before} -> {after}"
+        processes.len() <= 1,
+        "unexpected processes in isolated runtime: {processes:?}"
     );
+    if let Some(command) = processes.first() {
+        let args: Vec<_> = command
+            .split(|byte| *byte == 0)
+            .filter(|arg| !arg.is_empty())
+            .collect();
+        assert!(
+            args.iter().any(|arg| *arg == b"serve") && args.iter().any(|arg| *arg == b"--daemon"),
+            "unexpected isolated-runtime process: {args:?}"
+        );
+    }
 }
 
-fn count_procs() -> usize {
-    std::fs::read_dir("/proc")
-        .map(|entries| {
-            entries
-                .filter_map(|e| e.ok())
-                .filter(|e| {
-                    e.file_name()
-                        .to_string_lossy()
-                        .chars()
-                        .all(|c| c.is_ascii_digit())
-                })
-                .count()
+fn runtime_processes(runtime_dir: &std::path::Path) -> Vec<Vec<u8>> {
+    let mut runtime_entry = b"XDG_RUNTIME_DIR=".to_vec();
+    runtime_entry.extend_from_slice(runtime_dir.as_os_str().as_bytes());
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .chars()
+                .all(|character| character.is_ascii_digit())
         })
-        .unwrap_or(0)
+        .filter_map(|entry| {
+            let environment = std::fs::read(entry.path().join("environ")).ok()?;
+            environment
+                .split(|byte| *byte == 0)
+                .any(|variable| variable == runtime_entry)
+                .then(|| std::fs::read(entry.path().join("cmdline")).ok())
+                .flatten()
+        })
+        .collect()
 }

@@ -6,6 +6,7 @@ use std::collections::HashMap;
 #[derive(Clone, Default)]
 pub struct Overrides {
     entries: HashMap<String, Vec<PhonemeKind>>,
+    parse_errors: Vec<(String, String)>,
 }
 
 impl Overrides {
@@ -17,15 +18,28 @@ impl Overrides {
         self.entries.is_empty()
     }
 
+    pub fn first_parse_error(&self) -> Option<(&str, &str)> {
+        self.parse_errors
+            .first()
+            .map(|(word, symbol)| (word.as_str(), symbol.as_str()))
+    }
+
     pub fn parse_symbol(sym: &str) -> Option<PhonemeKind> {
         en::symbol(sym).or_else(|| fr::symbol(sym))
     }
 
     pub fn insert(&mut self, word: &str, symbols: &[&str]) {
-        let kinds: Vec<PhonemeKind> = symbols
-            .iter()
-            .filter_map(|s| Self::parse_symbol(s))
-            .collect();
+        let mut kinds = Vec::with_capacity(symbols.len());
+        for symbol in symbols {
+            match Self::parse_symbol(symbol) {
+                Some(kind) => kinds.push(kind),
+                None => {
+                    self.parse_errors
+                        .push((word.to_lowercase(), (*symbol).to_string()));
+                    return;
+                }
+            }
+        }
         if !kinds.is_empty() {
             self.entries.insert(word.to_lowercase(), kinds);
         }
@@ -59,12 +73,10 @@ mod tests {
     }
 
     #[test]
-    fn ignores_unknown_symbols() {
+    fn records_unknown_symbols_as_errors() {
         let mut overrides = Overrides::default();
         overrides.insert("foo", &["ZZZ", "M", "M"]);
-        assert_eq!(
-            overrides.get("foo").unwrap(),
-            &vec![PhonemeKind::M, PhonemeKind::M]
-        );
+        assert_eq!(overrides.get("foo"), None);
+        assert_eq!(overrides.first_parse_error(), Some(("foo", "ZZZ")));
     }
 }

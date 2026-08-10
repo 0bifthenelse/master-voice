@@ -176,6 +176,83 @@ pub const ENGLISH_MARKERS: [&str; 68] = [
     "temperature",
 ];
 
+fn has_french_diacritic(word: &str) -> bool {
+    word.chars().any(|character| {
+        matches!(
+            character,
+            'é' | 'è' | 'ê' | 'ë' | 'à' | 'â' | 'ç' | 'ù' | 'û' | 'î' | 'ï' | 'ô' | 'œ'
+        )
+    })
+}
+
+pub fn route_words(words: &[&str]) -> Vec<Language> {
+    let cleaned: Vec<String> = words
+        .iter()
+        .map(|word| {
+            word.trim_matches(|character: char| {
+                !character.is_alphanumeric() && character != '\'' && character != '-'
+            })
+            .to_lowercase()
+        })
+        .collect();
+    let confident: Vec<Option<Language>> = cleaned
+        .iter()
+        .map(|word| {
+            let french_marker = FRENCH_MARKERS.contains(&word.as_str());
+            let english_marker = ENGLISH_MARKERS.contains(&word.as_str());
+            let english_special = ["mr", "mrs", "ms", "dr", "smith"].contains(&word.as_str());
+            let french_dictionary = crate::g2p::fr::has_dictionary_word(word);
+            let english_dictionary = crate::dict::en::lookup(word).is_some();
+            if has_french_diacritic(word)
+                || french_marker && !english_marker
+                || french_dictionary && !english_dictionary
+            {
+                Some(Language::French)
+            } else if english_special
+                || english_marker && !french_marker
+                || english_dictionary && !french_dictionary
+            {
+                Some(Language::English)
+            } else {
+                None
+            }
+        })
+        .collect();
+    let fallback = detect(&cleaned.join(" ")).unwrap_or(Language::French);
+    confident
+        .iter()
+        .enumerate()
+        .map(|(index, language)| {
+            if let Some(language) = language {
+                return *language;
+            }
+            let left =
+                confident[..index]
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .find_map(|(candidate, language)| {
+                        language.map(|language| (index - candidate, language))
+                    });
+            let right = confident[index + 1..]
+                .iter()
+                .enumerate()
+                .find_map(|(offset, language)| language.map(|language| (offset + 1, language)));
+            match (left, right) {
+                (Some((left_distance, left_language)), Some((right_distance, right_language))) => {
+                    if left_distance <= right_distance {
+                        left_language
+                    } else {
+                        right_language
+                    }
+                }
+                (Some((_, language)), None) | (None, Some((_, language))) => language,
+                (None, None) => fallback,
+            }
+        })
+        .collect()
+}
+
 pub fn detect(text: &str) -> Option<Language> {
     let lower = text.to_lowercase();
     let words: Vec<String> = lower

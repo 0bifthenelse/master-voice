@@ -262,6 +262,31 @@ pub fn phonemize_word(word: &str, next_first: Option<char>) -> Vec<(PhonemeKind,
     rules(&lower)
 }
 
+pub fn phonemize_word_context(
+    word: &str,
+    previous: Option<&str>,
+    next_first: Option<char>,
+    past_context: bool,
+) -> Vec<(PhonemeKind, u8)> {
+    let lower = word
+        .trim_end_matches(['.', ',', '!', '?', ';', ':', '"', ')', ']', '»'])
+        .to_lowercase();
+    if lower == "read" && past_context {
+        return vec![(R, 0), (EH, 1), (D, 0)];
+    }
+    if lower == "record" {
+        let previous = previous.unwrap_or_default().to_ascii_lowercase();
+        if [
+            "to", "will", "can", "could", "should", "would", "do", "does", "did", "must",
+        ]
+        .contains(&previous.as_str())
+        {
+            return vec![(R, 0), (IH, 0), (K, 0), (AO, 1), (R, 0), (D, 0)];
+        }
+    }
+    phonemize_word(word, next_first)
+}
+
 fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
     let chars: Vec<char> = word.chars().collect();
     let n = chars.len();

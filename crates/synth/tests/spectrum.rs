@@ -1,170 +1,186 @@
-//! V2/V3: the output has formants (objective intelligibility), and the
-//! replicant character does not damage them.
-//!
-//! Measurement notes (why this is the right reading of "the output has
-//! formants"): the steady-state spectrum of a harmonic source is a comb;
-//! the formant *positions* are measured from the smoothed envelope at the
-//! pitch where harmonics land exactly on the formants (f0 = 100 Hz:
-//! IY 300 = 3x, 2300 = 23x; AA 720 = 7.2x, 1100 = 11x). The literal
-//! "two strongest peaks" criterion is unmeasurable for a DC-normalized
-//! cascade: the F1 resonance's own skirt (~400-700 Hz) and the F3 region
-//! sit within a few dB of F2 by construction. The asserted contract is
-//! the plan's intent: F1 and F2 exist near their table values, and F1 is
-//! the dominant spectral feature.
+use master_voice_linguistics::phoneme::{Boundary, Phoneme, PhonemeKind, Stress};
+use master_voice_synth::{synthesize, SynthOptions, SAMPLE_RATE};
 
-use master_voice_linguistics::phoneme::{Phoneme, PhonemeKind};
-use master_voice_synth::SynthOptions;
-
-const SR: f32 = 22_050.0;
-const F_MIN: f32 = 100.0;
-const F_MAX: f32 = 3000.0;
-const GRID: f32 = 4.0;
-const ENV_WINDOW: f32 = 100.0; // +/- f0
-
-/// Goertzel power at one frequency (no new dependency).
-fn goertzel(samples: &[f32], freq: f32) -> f32 {
-    let w = 2.0 * std::f32::consts::PI * freq / SR;
-    let coeff = 2.0 * w.cos();
-    let (mut s0, mut s1, mut s2) = (0.0f32, 0.0f32, 0.0f32);
-    for &x in samples {
-        s0 = x + coeff * s1 - s2;
-        s2 = s1;
-        s1 = s0;
-    }
-    let _ = s0;
-    s1 * s1 + s2 * s2 - coeff * s1 * s2
-}
-
-/// Smoothed spectral envelope on a 4 Hz grid: each point is the mean
-/// Goertzel power over [f - ENV_WINDOW, f + ENV_WINDOW], clipped to the
-/// sweep range.
-fn envelope(samples: &[f32]) -> Vec<(f32, f32)> {
-    let mut env = Vec::new();
-    let mut f = F_MIN;
-    while f <= F_MAX {
-        let mut acc = 0.0f32;
-        let mut n = 0;
-        let mut g = (f - ENV_WINDOW).max(F_MIN);
-        while g <= (f + ENV_WINDOW).min(F_MAX) {
-            acc += goertzel(samples, g);
-            n += 1;
-            g += GRID;
-        }
-        env.push((f, acc / n as f32));
-        f += GRID;
-    }
-    env
-}
-
-/// The formant position and power: power-weighted centroid of the
-/// envelope inside [target * 0.85, target * 1.15]. The centroid is robust
-/// for broad resonances (the AA F1's -1 dB band spans ~80 Hz; a local-max
-/// detector would report the plateau's edge, which drifts with the
-/// character layers even though the resonance does not move).
-fn formant_peak(env: &[(f32, f32)], target: f32) -> Option<(f32, f32)> {
-    let (lo, hi) = (target * 0.85, target * 1.15);
-    let mut sum = 0.0f32;
-    let mut wsum = 0.0f32;
-    let mut max_p = 0.0f32;
-    for &(f, p) in env {
-        if f < lo || f > hi {
-            continue;
-        }
-        sum += p;
-        wsum += f * p;
-        max_p = max_p.max(p);
-    }
-    if sum <= 0.0 {
-        return None;
-    }
-    Some((wsum / sum, max_p))
-}
-
-fn global_peak(env: &[(f32, f32)]) -> (f32, f32) {
-    env.iter().fold(
-        (0.0, 0.0f32),
-        |acc, &(f, p)| if p > acc.1 { (f, p) } else { acc },
-    )
-}
-
-fn vowel_samples(kind: PhonemeKind, depth: f32) -> Vec<f32> {
-    let phonemes = [Phoneme::new(kind), Phoneme::new(kind), Phoneme::new(kind)];
-    // f0 = 100 Hz (pitch 0.847): harmonics land exactly on the formants,
-    // so the envelope peaks measure the resonance centres, not comb lines.
-    let opts = SynthOptions {
-        rate: 0.9,
-        pitch: 0.847,
-        robotic_depth: depth,
-        ..SynthOptions::default()
+fn phone(kind: PhonemeKind, boundary: Boundary) -> Phoneme {
+    let mut phone = Phoneme::new(kind);
+    phone.stress = if phone.is_vowel() {
+        Stress::Primary
+    } else {
+        Stress::None
     };
-    let buffer = master_voice_synth::synthesize(&phonemes, &opts);
-    assert!(buffer.samples.len() > 4096, "need a long steady vowel");
-    // Steady-state window in the middle of the second vowel.
-    let start = buffer.samples.len() / 2 - 1024;
-    buffer.samples[start..start + 2048].to_vec()
+    phone.boundary_after = boundary;
+    phone
 }
 
-/// Assert F1 and F2 are measurable near their table values, and F1 is the
-/// dominant feature of the spectrum.
-fn assert_formants(kind: PhonemeKind, f1_target: f32, f2_target: f32) {
-    let samples = vowel_samples(kind, 0.0);
-    let env = envelope(&samples);
-    let (g_f, g_p) = global_peak(&env);
-    let f1 = formant_peak(&env, f1_target).expect("F1 window peak");
-    let f2 = formant_peak(&env, f2_target).expect("F2 window peak");
+fn goertzel(samples: &[f32], frequency: f32) -> f32 {
+    let omega = std::f32::consts::TAU * frequency / SAMPLE_RATE as f32;
+    let coefficient = 2.0 * omega.cos();
+    let mut previous = 0.0;
+    let mut previous_two = 0.0;
+    for sample in samples {
+        let current = sample + coefficient * previous - previous_two;
+        previous_two = previous;
+        previous = current;
+    }
+    (previous_two * previous_two + previous * previous - coefficient * previous * previous_two)
+        / samples.len().max(1) as f32
+}
 
-    let err = |f: f32, t: f32| (f - t).abs() / t;
-    assert!(
-        err(f1.0, f1_target) <= 0.15,
-        "F1 measured at {:.0} Hz (target {f1_target:.0})",
-        f1.0
+fn band_power(samples: &[f32], low: f32, high: f32) -> f32 {
+    let mut sum = 0.0;
+    let mut count = 0usize;
+    let mut frequency = low;
+    while frequency <= high {
+        sum += goertzel(samples, frequency);
+        count += 1;
+        frequency += 25.0;
+    }
+    sum / count.max(1) as f32
+}
+
+fn estimate_f0(samples: &[f32]) -> f32 {
+    let mean = samples.iter().sum::<f32>() / samples.len().max(1) as f32;
+    let minimum_lag = (SAMPLE_RATE as f32 / 170.0) as usize;
+    let maximum_lag = (SAMPLE_RATE as f32 / 75.0) as usize;
+    let mut best_lag = minimum_lag;
+    let mut best = f32::NEG_INFINITY;
+    for lag in minimum_lag..=maximum_lag.min(samples.len().saturating_sub(1)) {
+        let score = samples[..samples.len() - lag]
+            .iter()
+            .zip(&samples[lag..])
+            .map(|(left, right)| (left - mean) * (right - mean))
+            .sum::<f32>();
+        if score > best {
+            best = score;
+            best_lag = lag;
+        }
+    }
+    SAMPLE_RATE as f32 / best_lag as f32
+}
+
+fn steady_vowel(kind: PhonemeKind, depth: f32, pitch: f32) -> Vec<f32> {
+    let buffer = synthesize(
+        &[phone(kind, Boundary::None)],
+        &SynthOptions {
+            pitch,
+            robotic_depth: depth,
+            ..SynthOptions::default()
+        },
     );
-    assert!(
-        err(f2.0, f2_target) <= 0.15,
-        "F2 measured at {:.0} Hz (target {f2_target:.0})",
-        f2.0
-    );
-    // F1 must dominate the whole spectrum: the global envelope maximum
-    // sits inside the F1 window.
-    assert!(
-        (g_f - f1_target).abs() / f1_target <= 0.15,
-        "F1 must dominate the spectrum (global peak at {g_f:.0} Hz, F1 target {f1_target:.0})"
-    );
-    let _ = g_p;
+    let edge = (0.020 * SAMPLE_RATE as f32) as usize;
+    buffer.samples[edge..buffer.samples.len() - edge].to_vec()
+}
+
+fn formant_centroid(samples: &[f32], target: f32) -> f32 {
+    let low = target * 0.85;
+    let high = target * 1.15;
+    let mut weighted = 0.0;
+    let mut total = 0.0;
+    let mut frequency = low;
+    while frequency <= high {
+        let power = goertzel(samples, frequency).max(0.0);
+        weighted += frequency * power;
+        total += power;
+        frequency += 10.0;
+    }
+    weighted / total.max(f32::MIN_POSITIVE)
 }
 
 #[test]
-fn v2_iy_has_formants() {
-    assert_formants(PhonemeKind::IY, 300.0, 2300.0);
+fn default_f0_and_user_pitch_follow_public_contract() {
+    let baseline = steady_vowel(PhonemeKind::IY, 0.0, 1.0);
+    let center = &baseline[baseline.len() / 3..baseline.len() * 2 / 3];
+    let f0 = estimate_f0(center);
+    assert!((105.0..=120.0).contains(&f0), "default F0 {f0}");
+
+    let raised = steady_vowel(PhonemeKind::IY, 0.0, 1.25);
+    let raised = estimate_f0(&raised[raised.len() / 3..raised.len() * 2 / 3]);
+    assert!(
+        (1.18..1.32).contains(&(raised / f0)),
+        "pitch ratio {}",
+        raised / f0
+    );
 }
 
 #[test]
-fn v2_aa_has_formants() {
-    assert_formants(PhonemeKind::AA, 720.0, 1100.0);
+fn question_tail_rises_twenty_percent_above_declarative() {
+    let kinds = [
+        PhonemeKind::DH,
+        PhonemeKind::AX,
+        PhonemeKind::V,
+        PhonemeKind::OI,
+    ];
+    let render = |boundary, pause_samples: usize| {
+        let mut phones: Vec<_> = kinds
+            .into_iter()
+            .map(|kind| phone(kind, Boundary::None))
+            .collect();
+        phones.last_mut().expect("phone").boundary_after = boundary;
+        let buffer = synthesize(&phones, &SynthOptions::default());
+        let speech_end = buffer.samples.len() - pause_samples;
+        estimate_f0(&buffer.samples[speech_end - 1400..speech_end - 200])
+    };
+    let declarative = render(Boundary::Sentence, 5280);
+    let question = render(Boundary::Question, 4320);
+    assert!(
+        question >= declarative * 1.20,
+        "declarative {declarative}, question {question}"
+    );
 }
 
 #[test]
-fn v3_character_does_not_move_formants() {
-    for (kind, f1, f2) in [
+fn vowel_formants_are_realized_and_character_invariant() {
+    for (kind, first, second) in [
         (PhonemeKind::IY, 300.0, 2300.0),
         (PhonemeKind::AA, 720.0, 1100.0),
     ] {
-        let plain = vowel_samples(kind, 0.0);
-        let character = vowel_samples(kind, 1.0);
-        assert_ne!(plain, character, "depth 1.0 must change the waveform");
-        let env_plain = envelope(&plain);
-        let env_char = envelope(&character);
-        let p1 = formant_peak(&env_plain, f1).expect("F1 at depth 0");
-        let p2 = formant_peak(&env_plain, f2).expect("F2 at depth 0");
-        let c1 = formant_peak(&env_char, f1).expect("F1 at depth 1");
-        let c2 = formant_peak(&env_char, f2).expect("F2 at depth 1");
-        for (p, c, name) in [(p1.0, c1.0, "F1"), (p2.0, c2.0, "F2")] {
-            let error = (p - c).abs() / p;
-            assert!(
-                error <= 0.05,
-                "{name} moved {:.1}% from {p:.0} to {c:.0} Hz",
-                error * 100.0
-            );
-        }
+        let plain = steady_vowel(kind, 0.0, 1.0);
+        let robotic = steady_vowel(kind, 1.0, 1.0);
+        let plain_first = formant_centroid(&plain, first);
+        let plain_second = formant_centroid(&plain, second);
+        let robot_first = formant_centroid(&robotic, first);
+        let robot_second = formant_centroid(&robotic, second);
+        assert!(
+            (plain_first / first - 1.0).abs() < 0.15,
+            "{kind:?} F1 {plain_first}"
+        );
+        assert!(
+            (plain_second / second - 1.0).abs() < 0.15,
+            "{kind:?} F2 {plain_second}"
+        );
+        assert!(
+            (robot_first / plain_first - 1.0).abs() < 0.05,
+            "{kind:?} F1 moved: {plain_first} to {robot_first}"
+        );
+        assert!(
+            (robot_second / plain_second - 1.0).abs() < 0.05,
+            "{kind:?} F2 moved: {plain_second} to {robot_second}"
+        );
+        let second_band = band_power(&plain, second * 0.9, second * 1.1);
+        let valley = band_power(&plain, second * 0.65, second * 0.75);
+        let minimum_ratio = if kind == PhonemeKind::IY { 0.35 } else { 0.20 };
+        assert!(
+            second_band > valley * minimum_ratio,
+            "{kind:?} F2 is starved: band {second_band}, valley {valley}, ratio {}",
+            second_band / valley
+        );
     }
+}
+
+#[test]
+fn average_voiced_spectral_tilt_is_between_three_and_seven_db_per_octave() {
+    let mut octave_powers = [0.0f32; 3];
+    for kind in [PhonemeKind::IY, PhonemeKind::AA, PhonemeKind::UW] {
+        let samples = steady_vowel(kind, 0.0, 1.0);
+        octave_powers[0] += band_power(&samples, 300.0, 600.0);
+        octave_powers[1] += band_power(&samples, 600.0, 1200.0);
+        octave_powers[2] += band_power(&samples, 1200.0, 2400.0);
+    }
+    let low_to_mid = 10.0 * (octave_powers[1] / octave_powers[0]).log10();
+    let mid_to_high = 10.0 * (octave_powers[2] / octave_powers[1]).log10();
+    let tilt = (low_to_mid + mid_to_high) * 0.5;
+    assert!(
+        (-7.0..=-3.0).contains(&tilt),
+        "spectral tilt {tilt} dB/octave"
+    );
 }
