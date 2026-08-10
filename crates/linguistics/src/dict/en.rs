@@ -342,6 +342,18 @@ vehicle V IY1 IH0 K AX0 L
 wednesday W EH1 N Z D EY0
 women W IH1 M IH0 N
 yacht Y AA1 T
+anchor AE1 NG K ER0
+chaos K EY1 AA S
+chemist K EH1 M IH0 S T
+echo EH1 K OW0
+school S K UW1 L
+thank TH AE1 NG K
+thin TH IH1 N
+think TH IH1 NG K
+thirty TH ER1 T IY0
+thousand TH AW1 Z AX0 N D
+throw TH R OW1
+thumb TH AH1 M
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {

@@ -488,7 +488,14 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
                         i += 2;
                     }
                 } else if next == 'k' || next == 'c' {
-                    out.push((NG, 0));
+                    // n before c is /ng/ only before hard c (a, o, u, h);
+                    // before soft c (e, i, y) it stays /n/ (sentence, silence).
+                    let after_c = chars.get(i + 2).copied().unwrap_or(' ');
+                    if next == 'c' && matches!(after_c, 'e' | 'i' | 'y') {
+                        out.push((N, 0));
+                    } else {
+                        out.push((NG, 0));
+                    }
                     i += 1;
                 } else if next == 'n' {
                     out.push((N, 0));
