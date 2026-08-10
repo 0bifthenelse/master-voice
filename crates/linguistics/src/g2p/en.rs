@@ -546,15 +546,18 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
                     out.push((SH, 0));
                     out.push((AX, 0));
                     out.push((N, 0));
-                    i += 4;
+                    i += 5;
                 } else if next == 's' {
                     out.push((S, 0));
                     i += 2;
                 } else if next == 'i' && (next2 == 'o' || next2 == 'a') {
-                    out.push((SH, 0));
+                    // -sion after a vowel is voiced (vision), after a
+                    // consonant voiceless (tension); consume the trailing n.
+                    let voiced = is_vowel_sound(out.last().map(|(k, _)| *k).unwrap_or(AX));
+                    out.push((if voiced { ZH } else { SH }, 0));
                     out.push((AX, 0));
                     out.push((N, 0));
-                    i += 3;
+                    i += 4;
                 } else if i > 0
                     && i + 1 < n
                     && (is_vowel_letter(next) || next == 'y')
@@ -613,7 +616,7 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
                     out.push((SH, 0));
                     out.push((AX, 0));
                     out.push((N, 0));
-                    i += 3;
+                    i += 4;
                 } else if next == 'i' && (next2 == 'a' || next2 == 'e') {
                     if word.starts_with("question") {
                         out.push((CH, 0));

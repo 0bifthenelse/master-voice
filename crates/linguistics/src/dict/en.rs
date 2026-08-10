@@ -354,6 +354,38 @@ thirty TH ER1 T IY0
 thousand TH AW1 Z AX0 N D
 throw TH R OW1
 thumb TH AH1 M
+education EH2 JH UW0 K EY1 SH AX0 N
+suggestion S AX0 G JH EH1 S CH AX0 N
+bought B AO1 T
+bread B R EH1 D
+break B R EY1 K
+brought B R AO1 T
+calm K AA1 M
+castle K AE1 S AX0 L
+cautious K AO1 SH AX0 S
+conscious K AA1 N SH AX0 S
+delicious D IH0 L IH1 SH AX0 S
+design D IH0 Z AY1 N
+dough D OW1
+fasten F AE1 S AX0 N
+fought F AO1 T
+half HH AE1 F
+head HH EH1 D
+heard HH ER1 D
+heart HH AA1 R T
+listen L IH1 S AX0 N
+often AO1 F AX0 N
+ought AO1 T
+precious P R EH1 SH AX0 S
+rough R AH1 F
+sign S AY1 N
+soften S AO1 F AX0 N
+sought S AO1 T
+steak S T EY1 K
+talk T AO1 K
+tough T AH1 F
+walk W AO1 K
+whistle W IH1 S AX0 L
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
