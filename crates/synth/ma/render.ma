@@ -237,6 +237,7 @@ mv_render:
     cmpq $0, 80(%rsp)
     je .Lrender_phone_done
     movl $0, (%rbx,%rbp,4)
+    movl $0, MV_STATE_PREV_PCM(%r13)
     inc %rbp
     incq MV_STATE_SAMPLE_INDEX(%r13)
     decq 80(%rsp)

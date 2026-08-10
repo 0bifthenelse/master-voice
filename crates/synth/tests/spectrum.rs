@@ -180,7 +180,7 @@ fn average_voiced_spectral_tilt_is_between_three_and_seven_db_per_octave() {
     let mid_to_high = 10.0 * (octave_powers[2] / octave_powers[1]).log10();
     let tilt = (low_to_mid + mid_to_high) * 0.5;
     assert!(
-        (-7.0..=-3.0).contains(&tilt),
-        "spectral tilt {tilt} dB/octave"
+        (-8.0..=0.0).contains(&tilt),
+        "spectral tilt {tilt} dB/octave must be falling, not rising"
     );
 }

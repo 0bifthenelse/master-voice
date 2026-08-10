@@ -290,6 +290,16 @@ hmm HH M
 phew F Y UW1
 ahem AH0 HH EH1 M
 oof UW1 F
+autumn AO1 T AX0 M
+careful K EH1 R F AX0 L
+engineer EH2 N JH IH0 N IH1 R
+garden G AA1 R D AX0 N
+gentle JH EH1 N T AX0 L
+leaves L IY1 V Z
+measured M EH1 ZH ER0 D
+moved M UW1 V D
+quiet K W AY1 AX0 T
+voltage V OW1 L T IH0 JH
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {

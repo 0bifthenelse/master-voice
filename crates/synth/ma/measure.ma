@@ -169,6 +169,11 @@ mv_phone_samples:
     ja .Lduration_overflow
     xor %edx, %edx
     mov MV_PHONE_BOUNDARY(%rdi), %r9d
+    cmp $1, %r9d
+    jne .Lduration_big_pause
+    mov $240, %edx
+    jmp .Lduration_add_pause
+.Lduration_big_pause:
     cmp $2, %r9d
     jb .Lduration_done
     test %ecx, %ecx

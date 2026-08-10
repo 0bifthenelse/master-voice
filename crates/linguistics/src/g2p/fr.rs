@@ -733,7 +733,7 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
                         i += 3;
                     } else if is_vowel_letter(after) || after == 'h' {
                         out.push(UE);
-                        out.push(N);
+                        out.push(M);
                         i += 2;
                     } else {
                         out.push(UN);
@@ -1123,6 +1123,9 @@ mod tests {
         assert_eq!(kinds("euh"), vec![OE]);
         assert_eq!(kinds("beurk"), vec![B, OEU, RR, K]);
         assert_eq!(kinds("oups"), vec![UW, P, S]);
+        assert_eq!(kinds("brume"), vec![B, RR, UE, M]);
+        assert_eq!(kinds("plume"), vec![P, L, UE, M]);
+        assert_eq!(kinds("parfum"), vec![P, AA, RR, F, UN]);
         assert_eq!(kinds("hein"), vec![EN]);
         assert_eq!(kinds("aïe"), vec![AA, Y]);
         assert_eq!(kinds("ouais"), vec![W, EH]);

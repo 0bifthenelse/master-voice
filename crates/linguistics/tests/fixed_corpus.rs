@@ -102,7 +102,7 @@ fn english_context_selects_past_read_and_record_stress() {
 
 #[test]
 fn french_dictionary_nuclei_liaisons_and_fils_context_are_explicit() {
-    use PhonemeKind::{B, F, IY, K, L, N, OW, S, UN, UW, Z};
+    use PhonemeKind::{AO, B, F, IY, K, L, N, OW, S, UN, UW, Z};
     let liaisons = phonemize(
         "LES AMIS. UN ENFANT.",
         Some(Language::French),
@@ -130,7 +130,12 @@ fn french_dictionary_nuclei_liaisons_and_fils_context_are_explicit() {
     )
     .expect("beaucoup");
     assert_eq!(word_phones(&beaucoup.phonemes)[0], vec![B, OW, K, UW]);
+    // French phrase accent: only the phrase-final word keeps primary stress.
     assert!(beaucoup
+        .phonemes
+        .iter()
+        .any(|phone| phone.kind == AO && phone.stress == Stress::Primary));
+    assert!(!beaucoup
         .phonemes
         .iter()
         .any(|phone| phone.kind == UW && phone.stress != Stress::None));

@@ -73,6 +73,36 @@ pub fn phonemize(
             let normalized = normalize::normalize_sentence(&span_text, span_language, &opts);
             let tokens = g2p::tokenize(&normalized);
             let mut phones = g2p::phonemize_tokens(&tokens, span_language, overrides);
+            if span_language == Language::French {
+                // French phrase accent: keep primary stress on the last
+                // stressed syllable of each clause segment; word-level stress
+                // everywhere would produce an unnatural bouncy rhythm.
+                let mut accented = vec![false; phones.len()];
+                let mut last_primary = None;
+                for (index, phone) in phones.iter().enumerate() {
+                    if phone.stress == phoneme::Stress::Primary {
+                        last_primary = Some(index);
+                    }
+                    let segment_end = matches!(
+                        phone.boundary_after,
+                        phoneme::Boundary::Clause
+                            | phoneme::Boundary::Sentence
+                            | phoneme::Boundary::Question
+                            | phoneme::Boundary::Exclaim
+                    ) || index + 1 == phones.len();
+                    if segment_end {
+                        if let Some(last) = last_primary {
+                            accented[last] = true;
+                        }
+                        last_primary = None;
+                    }
+                }
+                for (index, phone) in phones.iter_mut().enumerate() {
+                    if phone.stress == phoneme::Stress::Primary && !accented[index] {
+                        phone.stress = phoneme::Stress::None;
+                    }
+                }
+            }
             if let Some(last) = phones.last_mut() {
                 last.boundary_after = phoneme::Boundary::Word;
             }
