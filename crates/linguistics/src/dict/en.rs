@@ -51,7 +51,7 @@ down D AW1 N
 during D UH1 R IH0 NG
 each IY1 CH
 eight EY1 T
-either IY1 DH ER0
+either AY1 DH ER0
 february F EH1 B R UW0 EH2 R IY0
 find F AY1 N D
 first F ER1 S T
@@ -198,7 +198,7 @@ tomorrow T AH0 M AO1 R OW0
 tonight T AH0 N AY1 T
 too T UW1
 two T UW1
-use Y UW1 Z ER0
+use Y UW1 Z
 user Y UW1 Z ER0
 used Y UW1 Z D
 using Y UW1 Z IH0 NG
@@ -243,7 +243,7 @@ none N AH1 N
 front F R AH1 N T
 music M Y UW1 Z IH0 K
 cute K Y UW1 T
-human HH Y UW1 M AH0 N
+human HH Y UW1 M AX0 N
 future F Y UW1 CH ER0
 unit Y UW1 N IH0 T
 question K W EH1 S CH AX0 N
@@ -529,6 +529,335 @@ talked T AO1 K T
 wanted W AA1 N T IH0 D
 wed W EH1 D
 worked W ER1 K T
+address AX0 D R EH1 S
+adult AX0 D AH1 L T
+although AO1 L DH OW0
+among AX0 M AH1 NG
+apply AX0 P L AY1
+available AX0 V EY1 L AX0 B AX0 L
+become B IH0 K AH1 M
+behavior B IH0 HH EY1 V Y ER0
+build B IH1 L D
+busy B IH1 Z IY0
+buy B AY1
+career K ER0 IH1 R
+certain S ER1 T AX0 N
+challenge CH AE1 L AX0 N JH
+column K AA1 L AX0 M
+commercial K AX0 M ER1 SH AX0 L
+computer K AX0 M P Y UW1 T ER0
+consider K AX0 N S IH1 D ER0
+consumer K AX0 N S UW1 M ER0
+continue K AX0 N T IH1 N Y UW0
+control K AX0 N T R OW1 L
+correct K AX0 R EH1 K T
+culture K AH1 L CH ER0
+current K ER1 AX0 N T
+customer K AH1 S T AX0 M ER0
+damage D AE1 M IH0 JH
+daughter D AO1 T ER0
+dead D EH1 D
+death D EH1 TH
+debate D IH0 B EY1 T
+decade D EH1 K EY0 D
+decide D IH0 S AY1 D
+decision D IH0 S IH1 ZH AX0 N
+defense D IH0 F EH1 N S
+degree D IH0 G R IY1
+demand D IH0 M AE1 N D
+democratic D EH1 M AX0 K R AE2 T IH0 K
+describe D IH0 S K R AY1 B
+detail D IH1 T EY0 L
+develop D IH0 V EH1 L AX0 P
+development D IH0 V EH1 L AX0 P M AX0 N T
+die D AY1
+diet D AY1 AX0 T
+difference D IH1 F R AX0 N S
+difficult D IH1 F AX0 K AX0 L T
+director D ER0 EH1 K T ER0
+discover D IH0 S K AH1 V ER0
+discuss D IH0 S K AH1 S
+discussion D IH0 S K AH1 SH AX0 N
+draw D R AO1
+drug D R AH1 G
+economic EH2 K AX0 N AA1 M IH0 K
+economy IH0 K AA1 N AX0 M IY0
+effect IH0 F EH1 K T
+effort EH1 F ER0 T
+election IH0 L EH1 K SH AX0 N
+employee EH0 M P L OY1 IY0
+enjoy EH0 N JH OY1
+entire EH0 N T AY1 ER0
+environment EH0 N V AY1 ER0 N M AX0 N T
+especially EH0 S P EH1 SH AX0 L IY0
+establish IH0 S T AE1 B L IH0 SH
+event IH0 V EH1 N T
+everybody EH1 V R IY0 B AA2 D IY0
+everyone EH1 V R IY0 W AH2 N
+evidence EH1 V IH0 D AX0 N S
+exactly IH0 G Z AE1 K T L IY0
+executive IH0 G Z EH1 K Y UW0 T IH0 V
+exist IH0 G Z IH1 S T
+expect IH0 K S P EH1 K T
+experience IH0 K S P IH1 R IY0 AX0 N S
+factor F AE1 K T ER0
+fall F AO1 L
+federal F EH1 D ER0 AX0 L
+figure F IH1 G Y ER0
+final F AY1 N AX0 L
+finally F AY1 N AX0 L IY0
+financial F IH0 N AE1 N SH AX0 L
+finger F IH1 NG G ER0
+focus F OW1 K AX0 S
+foot F UH1 T
+foreign F AO1 R AX0 N
+forget F ER0 G EH1 T
+forward F AO1 R W ER0 D
+full F UH1 L
+fund F AH1 N D
+generation JH EH2 N AX0 R EY1 SH AX0 N
+grow G R OW1
+growth G R OW1 TH
+guess G EH1 S
+gun G AH1 N
+guy G AY1
+hair HH EH1 R
+happen HH AE1 P AX0 N
+health HH EH1 L TH
+herself HH ER1 S EH0 L F
+history HH IH1 S T ER0 IY0
+hold HH OW1 L D
+hospital HH AA1 S P IH0 T AX0 L
+hotel HH OW1 T EH1 L
+however HH AW0 EH1 V ER0
+huge HH Y UW1 JH
+husband HH AH1 Z B AX0 N D
+identify AY0 D EH1 N T IH0 F AY0
+image IH1 M IH0 JH
+imagine IH0 M AE1 JH IH0 N
+improve IH0 M P R UW1 V
+include IH0 N K L UW1 D
+including IH0 N K L UW1 D IH0 NG
+increase IH0 N K R IY1 S
+indeed IH0 N D IY1 D
+indicate IH1 N D IH0 K EY0 T
+individual IH2 N D IH0 V IH1 JH UW0 AX0 L
+industry IH1 N D AX0 S T R IY0
+information IH2 N F ER0 M EY1 SH AX0 N
+instead IH0 N S T EH1 D
+institution IH2 N S T IH0 T UW1 SH AX0 N
+interest IH1 N T R AX0 S T
+international IH2 N T ER0 N AE1 SH AX0 N AX0 L
+interview IH1 N T ER0 V Y UW0
+investment IH0 N V EH1 S T M AX0 N T
+issue IH1 SH UW0
+item AY1 T AX0 M
+key K IY1
+kitchen K IH1 CH AX0 N
+knowledge N AA1 L IH0 JH
+later L EY1 T ER0
+law L AO1
+lawyer L AO1 Y ER0
+legal L IY1 G AX0 L
+level L EH1 V AX0 L
+likely L AY1 K L IY0
+local L OW1 K AX0 L
+lose L UW1 Z
+loss L AO1 S
+machine M AX0 SH IY1 N
+major M EY1 JH ER0
+majority M AX0 JH AO1 R IH0 T IY0
+manage M AE1 N IH0 JH
+management M AE1 N IH0 JH M AX0 N T
+manager M AE1 N IH0 JH ER0
+market M AA1 R K IH0 T
+marriage M EH1 R IH0 JH
+material M AX0 T IH1 R IY0 AX0 L
+measure M EH1 ZH ER0
+media M IY1 D IY0 AX0
+medical M EH1 D IH0 K AX0 L
+memory M EH1 M ER0 IY0
+message M EH1 S IH0 JH
+method M EH1 TH AX0 D
+middle M IH1 D AX0 L
+military M IH1 L IH0 T EH2 R IY0
+million M IH1 L Y AX0 N
+mind M AY1 N D
+model M AA1 D AX0 L
+moment M OW1 M AX0 N T
+movement M UW1 V M AX0 N T
+movie M UW1 V IY0
+myself M AY1 S EH0 L F
+nation N EY1 SH AX0 N
+news N UW1 Z
+newspaper N UW1 Z P EY2 P ER0
+nothing N AH1 TH IH0 NG
+notice N OW1 T IH0 S
+occur AX0 K ER1
+offer AO1 F ER0
+office AO1 F IH0 S
+officer AO1 F IH0 S ER0
+official AX0 F IH1 SH AX0 L
+onto AA1 N T UW0
+operation AA2 P ER0 EY1 SH AX0 N
+opportunity AA2 P ER0 T UW1 N IH0 T IY0
+organization AO2 R G AX0 N AX0 Z EY1 SH AX0 N
+others AH1 DH ER0 Z
+owner OW1 N ER0
+parent P EH1 R AX0 N T
+participant P AA2 R T IH1 S AX0 P AX0 N T
+particular P ER0 T IH1 K Y AX0 L ER0
+particularly P ER0 T IH1 K Y AX0 L ER0 L IY0
+patient P EY1 SH AX0 N T
+performance P ER0 F AO1 R M AX0 N S
+period P IH1 R IY0 AX0 D
+personal P ER1 S AX0 N AX0 L
+physical F IH1 Z IH0 K AX0 L
+player P L EY1 ER0
+police P AX0 L IY1 S
+political P AX0 L IH1 T IH0 K AX0 L
+popular P AA1 P Y AX0 L ER0
+population P AA2 P Y AX0 L EY1 SH AX0 N
+position P AX0 Z IH1 SH AX0 N
+positive P AA1 Z IH0 T IH0 V
+practice P R AE1 K T IH0 S
+prefer P R IH0 F ER1
+prepare P R IH0 P EH1 R
+present P R EH1 Z AX0 N T
+president P R EH1 Z IH0 D AX0 N T
+pressure P R EH1 SH ER0
+pretty P R IH1 T IY0
+prevent P R IH0 V EH1 N T
+private P R AY1 V IH0 T
+produce P R AX0 D UW1 S
+product P R AA1 D AX0 K T
+production P R AX0 D AH1 K SH AX0 N
+professional P R AX0 F EH1 SH AX0 N AX0 L
+professor P R AX0 F EH1 S ER0
+program P R OW1 G R AE2 M
+protect P R AX0 T EH1 K T
+prove P R UW1 V
+provide P R AX0 V AY1 D
+public P AH1 B L IH0 K
+pull P UH1 L
+purpose P ER1 P AX0 S
+push P UH1 SH
+quality K W AA1 L IH0 T IY0
+radio R EY1 D IY0 OW0
+range R EY1 N JH
+rather R AE1 DH ER0
+real R IY1 AX0 L
+reality R IY0 AE1 L IH0 T IY0
+realize R IY1 AX0 L AY2 Z
+reason R IY1 Z AX0 N
+receive R IH0 S IY1 V
+recent R IY1 S AX0 N T
+recently R IY1 S AX0 N T L IY0
+reduce R IH0 D UW1 S
+reflect R IH0 F L EH1 K T
+region R IY1 JH AX0 N
+relate R IH0 L EY1 T
+relationship R IH0 L EY1 SH AX0 N SH IH0 P
+religious R IH0 L IH1 JH AX0 S
+remain R IH0 M EY1 N
+remove R IH0 M UW1 V
+report R IH0 P AO1 R T
+represent R EH2 P R IH0 Z EH1 N T
+require R IH0 K W AY1 ER0
+research R IH0 S ER1 CH
+resource R IH0 S AO1 R S
+respond R IH0 S P AA1 N D
+response R IH0 S P AA1 N S
+responsibility R IH2 S P AA2 N S AX0 B IH1 L IH0 T IY0
+result R IH0 Z AH1 L T
+return R IH0 T ER1 N
+reveal R IH0 V IY1 L
+scene S IY1 N
+science S AY1 AX0 N S
+scientist S AY1 AX0 N T IH0 S T
+season S IY1 Z AX0 N
+second S EH1 K AX0 N D
+security S IH0 K Y UH1 R IH0 T IY0
+senior S IY1 N Y ER0
+series S IH1 R IY0 Z
+serious S IH1 R IY0 AX0 S
+service S ER1 V IH0 S
+seven S EH1 V AX0 N
+shoulder SH OW1 L D ER0
+show SH OW1
+significant S IH2 G N IH1 F IH0 K AX0 N T
+similar S IH1 M AX0 L ER0
+simple S IH1 M P AX0 L
+single S IH1 NG G AX0 L
+small S M AO1 L
+social S OW1 SH AX0 L
+society S AX0 S AY1 AX0 T IY0
+soldier S OW1 L JH ER0
+somebody S AH1 M B AA2 D IY0
+someone S AH1 M W AH2 N
+song S AO1 NG
+source S AO1 R S
+southern S AH1 DH ER0 N
+specific S P AX0 S IH1 F IH0 K
+standard S T AE1 N D ER0 D
+statement S T EY1 T M AX0 N T
+station S T EY1 SH AX0 N
+strategy S T R AE1 T AX0 JH IY0
+strength S T R EH1 NG K TH
+strong S T R AO1 NG
+structure S T R AH1 K CH ER0
+student S T UW1 D AX0 N T
+study S T AH1 D IY0
+stuff S T AH1 F
+style S T AY1 L
+subject S AH1 B JH EH0 K T
+success S AX0 K S EH1 S
+successful S AX0 K S EH1 S F AX0 L
+such S AH1 CH
+suddenly S AH1 D AX0 N L IY0
+suffer S AH1 F ER0
+suggest S AX0 G JH EH1 S T
+summer S AH1 M ER0
+support S AX0 P AO1 R T
+surface S ER1 F IH0 S
+table T EY1 B AX0 L
+technology T EH0 K N AA1 L AX0 JH IY0
+themselves DH EH1 M S EH0 L V Z
+theory TH IH1 R IY0
+throughout TH R UW1 AW0 T
+thus DH AH1 S
+total T OW1 T AX0 L
+toward T ER1 W ER0 D
+town T AW1 N
+traditional T R AX0 D IH1 SH AX0 N AX0 L
+travel T R AE1 V AX0 L
+treatment T R IY1 T M AX0 N T
+trial T R AY1 AX0 L
+truth T R UW1 TH
+type T AY1 P
+understand AH2 N D ER0 S T AE1 N D
+until AX0 N T IH1 L
+upon AX0 P AO1 N
+us AH1 S
+usually Y UW1 ZH UW0 AX0 L IY0
+value V AE1 L Y UW0
+various V EH1 R IY0 AX0 S
+view V Y UW1
+violence V AY1 AX0 L AX0 N S
+wall W AO1 L
+watch W AA1 CH
+weapon W EH1 P AX0 N
+weight W EY1 T
+whatever W AH0 T EH1 V ER0
+whether W EH1 DH ER0
+whom HH UW1 M
+whose HH UW1 Z
+window W IH1 N D OW0
+within W IH0 DH IH1 N
+wonder W AH1 N D ER0
+worry W ER1 IY0
+writer R AY1 T ER0
+yourself Y AO1 R S EH0 L F
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
