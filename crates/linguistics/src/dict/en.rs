@@ -193,8 +193,8 @@ through TH R UW1
 time T AY1 M
 times T AY1 M Z
 to T UW1
-today T AH0 D EY1
-tomorrow T AH0 M AO1 R OW0
+today T AX0 D EY1
+tomorrow T AX0 M AA1 R OW0
 tonight T AH0 N AY1 T
 too T UW1
 two T UW1
@@ -905,6 +905,27 @@ tread T R EH1 D
 treasure T R EH1 ZH ER0
 wealth W EH1 L TH
 zealous Z EH1 L AX0 S
+altogether AO2 L T AX0 G EH1 DH ER0
+anywhere EH1 N IY0 W EH2 R
+book B UH1 K
+chemical K EH1 M IH0 K AX0 L
+everything EH1 V R IY0 TH IH2 NG
+exact IH0 G Z AE1 K T
+examine IH0 G Z AE1 M IH0 N
+excellent EH1 K S AX0 L AX0 N T
+except IH0 K S EH1 P T
+exchange IH0 K S CH EY1 N JH
+expensive IH0 K S P EH1 N S IH0 V
+explore IH0 K S P L AO1 R
+express IH0 K S P R EH1 S
+extension IH0 K S T EH1 N SH AX0 N
+extra EH1 K S T R AX0
+extreme IH0 K S T R IY1 M
+mechanic M IH0 K AE1 N IH0 K
+nowhere N OW1 W EH2 R
+orchestra AO1 R K EH0 S T R AX0
+somewhere S AH1 M W EH2 R
+took T UH1 K
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
