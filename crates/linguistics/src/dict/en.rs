@@ -877,6 +877,34 @@ avoid AX0 V OI1 D
 concern K AX0 N S ER1 N
 condition K AX0 N D IH1 SH AX0 N
 expert EH1 K S P ER0 T
+breakfast B R EH1 K F AX0 S T
+breath B R EH1 TH
+breathe B R IY1 DH
+deadline D EH1 D L AY2 N
+deaf D EH1 F
+dread D R EH1 D
+feather F EH1 DH ER0
+healthy H EH1 L TH IY0
+heaven H EH1 V AX0 N
+jealous JH EH1 L AX0 S
+leather L EH1 DH ER0
+leopard L EH1 P ER0 D
+meant M EH1 N T
+peasant P EH1 Z AX0 N T
+pleasant P L EH1 Z AX0 N T
+pleasure P L EH1 ZH ER0
+realm R EH1 L M
+spread S P R EH1 D
+steady S T EH1 D IY0
+stealth S T EH1 L TH
+sweat S W EH1 T
+sweater S W EH1 T ER0
+theirs DH EH1 R Z
+threat TH R EH1 T
+tread T R EH1 D
+treasure T R EH1 ZH ER0
+wealth W EH1 L TH
+zealous Z EH1 L AX0 S
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
