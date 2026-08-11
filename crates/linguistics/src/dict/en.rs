@@ -963,6 +963,10 @@ admit AX0 D M IH1 T
 affect AX0 F EH1 K T
 afford AX0 F AO1 R D
 afraid AX0 F R EY1 D
+breeze B R IY1 Z
+closing K L OW1 Z IH0 NG
+precise P R IH0 S AY1 S
+save S EY1 V
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
