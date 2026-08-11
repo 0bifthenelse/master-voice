@@ -442,6 +442,47 @@ together T AX0 G EH1 DH ER0
 weather W EH1 DH ER0
 woman W UH1 M AX0 N
 write R AY1 T
+already AO1 L R EH2 D IY0
+begin B IH0 G IH1 N
+below B IH0 L OW1
+carry K AE1 R IY0
+change CH EY1 N JH
+color K AH1 L ER0
+course K AO1 R S
+distance D IH1 S T AX0 N S
+doctor D AA1 K T ER0
+eighty EY1 T IY0
+eleven IH0 L EH1 V AX0 N
+evening IY1 V N IH0 NG
+every EH1 V R IY0
+explain IH0 K S P L EY1 N
+eye AY1
+eyes AY1 Z
+father F AA1 DH ER0
+favorite F EY1 V R IH0 T
+few F Y UW1
+fire F AY1 ER0
+follow F AA1 L OW0
+group G R UW1 P
+height HH AY1 T
+hire HH AY1 ER0
+hundred HH AH1 N D R IH0 D
+idea AY0 D IH1 AX0
+low L OW1
+minute M IH1 N IH0 T
+mountain M AW1 N T AX0 N
+ninety N AY1 N T IY0
+old OW1 L D
+open OW1 P AX0 N
+own OW1 N
+paper P EY1 P ER0
+person P ER1 S AX0 N
+poor P UH1 R
+possible P AA1 S AX0 B AX0 L
+power P AW1 ER0
+problem P R AA1 B L AX0 M
+tire T AY1 ER0
+wire W AY1 ER0
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {

@@ -873,6 +873,11 @@ fn read_vowel(chars: &[char], i: usize, out: &[(PhonemeKind, u8)]) -> Option<(Ph
         return Some((kind, 1));
     }
 
+    if first == 'i' && at(j) == 'g' && at(j + 1) == 'h' {
+        // igh reads as /ai/ with a silent gh (night, light, right)
+        return Some((AI, 3));
+    }
+
     let kind = match first {
         'a' => AE,
         'e' => EH,
