@@ -125,6 +125,9 @@ const DICT_FR: &[(&str, &[PhonemeKind])] = &[
     ("soeur", &[S, OEU, RR]),
     ("voyage", &[V, W, AA, Y, AA, ZH]),
     ("yeux", &[Y, OE]),
+    ("quelque", &[K, EH, L, K, AX]),
+    ("difficile", &[D, IY, F, IY, S, IY, L]),
+    ("quatre-vingts", &[K, AA, T, RR, AX, V, EN]),
 ];
 
 pub(crate) fn lookup(word: &str) -> Option<Vec<PhonemeKind>> {
