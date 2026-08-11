@@ -354,7 +354,7 @@ thirty TH ER1 T IY0
 thousand TH AW1 Z AX0 N D
 throw TH R OW1
 thumb TH AH1 M
-education EH2 JH UW0 K EY1 SH AX0 N
+education EH2 JH UX0 K EY1 SH AX0 N
 suggestion S AX0 G JH EH1 S CH AX0 N
 bought B AO1 T
 bread B R EH1 D
@@ -858,6 +858,25 @@ wonder W AH1 N D ER0
 worry W ER1 IY0
 writer R AY1 T ER0
 yourself Y AO1 R S EH0 L F
+accept AX0 K S EH1 P T
+account AX0 K AW1 N T
+actually AE1 K CH UW0 AX0 L IY0
+agency EY1 JH AX0 N S IY0
+ago AX0 G OW1
+agree AX0 G R IY1
+almost AO1 L M OW0 S T
+alone AX0 L OW1 N
+along AX0 L AO1 NG
+amount AX0 M AW1 N T
+anyone EH1 N IY0 W AH2 N
+anything EH1 N IY0 TH IH2 NG
+attack AX0 T AE1 K
+attempt AX0 T EH1 M P T
+attorney AX0 T ER1 N IY0
+avoid AX0 V OI1 D
+concern K AX0 N S ER1 N
+condition K AX0 N D IH1 SH AX0 N
+expert EH1 K S P ER0 T
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
