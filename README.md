@@ -86,7 +86,7 @@ configuration at all.
 
 ```toml
 language = "auto"            # "fr-FR" | "en-US" | "auto"
-rate = 1.0                   # speech rate multiplier
+rate = 0.75                  # speech rate multiplier
 pitch = 1.0                  # pitch multiplier
 volume = 1.0                 # output volume multiplier
 robotic_depth = 0.22         # 0.0 = plain speech, 1.0 = full character

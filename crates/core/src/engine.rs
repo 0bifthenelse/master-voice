@@ -32,7 +32,10 @@ impl EngineSettings {
         let language = config.language.as_deref().and_then(Language::from_code);
         Self {
             language,
-            rate: config.rate.unwrap_or(1.0).clamp(0.5, 2.0),
+            rate: config
+                .rate
+                .unwrap_or(master_voice_synth::DEFAULT_RATE)
+                .clamp(0.5, 2.0),
             pitch: config.pitch.unwrap_or(1.0).clamp(0.5, 1.5),
             volume: config.volume.unwrap_or(1.0).clamp(0.0, 2.0),
             robotic_depth: config
@@ -175,12 +178,22 @@ mod tests {
     #[test]
     fn settings_from_default_config() {
         let settings = EngineSettings::from_config(&Config::default());
-        assert_eq!(settings.rate, 1.0);
+        assert_eq!(settings.rate, master_voice_synth::DEFAULT_RATE);
         assert_eq!(
             settings.robotic_depth,
             master_voice_synth::DEFAULT_ROBOTIC_DEPTH
         );
         assert_eq!(settings.language, None);
+    }
+
+    #[test]
+    fn configured_rate_preserves_multiplier_semantics() {
+        let config = Config {
+            rate: Some(1.2),
+            ..Config::default()
+        };
+        let settings = EngineSettings::from_config(&config);
+        assert_eq!(settings.rate, 1.2);
     }
 
     #[test]
@@ -192,6 +205,34 @@ mod tests {
         assert_eq!(language, Language::English);
         assert!(!buffer.samples.is_empty());
         assert!(buffer.samples.iter().all(|s| s.is_finite()));
+    }
+
+    #[test]
+    fn default_voice_uses_deliberate_bilingual_timing() {
+        let settings = EngineSettings::from_config(&Config::default());
+        let overrides = overrides_from_config(&Config::default());
+        for (text, language, duration_range) in [
+            (
+                "I HEREBY ACKNOWLEDGE THAT I AM A ROBOTIC VOICE AND MY NAME IS MASTER",
+                Language::English,
+                6.8..7.3,
+            ),
+            (
+                "JE RECONNAIS PAR LA PRÉSENTE QUE JE SUIS UNE VOIX ROBOTIQUE ET QUE MON NOM EST MASTER.",
+                Language::French,
+                5.9..6.5,
+            ),
+        ] {
+            let (_, buffer, _) =
+                synthesize_text(text, Some(language), &settings, &overrides).unwrap();
+            let duration = buffer.samples.len() as f32 / buffer.sample_rate as f32;
+            assert!(
+                duration_range.contains(&duration),
+                "{language:?}: duration={duration}"
+            );
+            assert!(buffer.samples.iter().all(|sample| sample.is_finite()));
+            assert!(buffer.samples.iter().all(|sample| sample.abs() < 0.95));
+        }
     }
 
     #[test]

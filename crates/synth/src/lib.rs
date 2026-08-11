@@ -3,6 +3,7 @@ mod ffi;
 use master_voice_linguistics::phoneme::Phoneme;
 
 pub const SAMPLE_RATE: u32 = 24_000;
+pub const DEFAULT_RATE: f32 = 0.75;
 pub const DEFAULT_ROBOTIC_DEPTH: f32 = 0.22;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -22,7 +23,7 @@ pub struct SynthOptions {
 impl Default for SynthOptions {
     fn default() -> Self {
         Self {
-            rate: 1.0,
+            rate: DEFAULT_RATE,
             pitch: 1.0,
             volume: 1.0,
             robotic_depth: DEFAULT_ROBOTIC_DEPTH,
