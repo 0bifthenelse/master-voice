@@ -185,7 +185,10 @@ pub fn phonemize_word(word: &str, next_first: Option<char>) -> Vec<(PhonemeKind,
     let lower = word
         .trim_end_matches(['.', ',', '!', '?', ';', ':', '"', ')', ']', '»'])
         .to_lowercase();
-    if lower.len() == 1 {
+    // Single letters spell their name (initialisms arrive as spaced
+    // uppercase letters from normalization), except the lowercase word "a"
+    // which reads as the weak article from the dictionary.
+    if lower.len() == 1 && word != "a" {
         return spell_letter(lower.chars().next().unwrap_or(' '));
     }
     if let Some(entry) = lookup(&lower) {
@@ -259,7 +262,50 @@ pub fn phonemize_word(word: &str, next_first: Option<char>) -> Vec<(PhonemeKind,
         }
         return out;
     }
+    if let Some(plural) = try_plural_dict(&lower) {
+        return plural;
+    }
     rules(&lower)
+}
+
+/// Dictionary lookup for a plural form: strip a trailing s/es/ies and look
+/// the stem up in the dictionary, appending the regular plural allomorph.
+/// Only fires on dict hits, so uncovered words keep the existing G2P path
+/// unchanged (soldiers -> soldier + Z, cities -> city + IY + Z).
+fn try_plural_dict(word: &str) -> Option<Vec<(PhonemeKind, u8)>> {
+    if let Some(stem) = word.strip_suffix("ies") {
+        if stem.len() < 3 {
+            return None;
+        }
+        let mut parsed = parse_dict_entry(lookup(stem)?);
+        parsed.push((IY, 0));
+        parsed.push((Z, 0));
+        return Some(parsed);
+    }
+    let (stem, syllabic) = if let Some(stem) = word.strip_suffix("es") {
+        (stem, true)
+    } else if let Some(stem) = word.strip_suffix('s') {
+        (stem, false)
+    } else {
+        return None;
+    };
+    if stem.len() < 3 {
+        return None;
+    }
+    let mut parsed = parse_dict_entry(lookup(stem)?);
+    let sibilant = matches!(
+        parsed.last().map(|(k, _)| *k),
+        Some(S | Z | SH | ZH | CH | JH)
+    );
+    if syllabic && sibilant {
+        parsed.push((IH, 0));
+    }
+    let allomorph = match parsed.last().map(|(k, _)| *k) {
+        Some(P | T | K | F | TH) => S,
+        _ => Z,
+    };
+    parsed.push((allomorph, 0));
+    Some(parsed)
 }
 
 pub fn phonemize_word_context(
@@ -298,6 +344,39 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
         let r: String = chars.iter().collect();
         r.ends_with(s)
     };
+
+    // Past-tense -ed: split the suffix off and re-phonemize the stem so
+    // dictionary coverage (laugh, walk, expect, examine) and magic-e stems
+    // (arrive, cause, smile) apply before appending the regular allomorph.
+    // The old code G2P'd the 'e' inside the suffix and then appended a
+    // redundant T/D, producing garbage like W AE L K EH D T for walked.
+    if ends_with("ed") && n >= 5 {
+        let last = at(n - 3);
+        if !matches!(last, 'a' | 'e' | 'i' | 'o' | 'u') {
+            let mut stem: String = chars[..n - 2].iter().collect();
+            let before = at(n - 4);
+            let before2 = at(n - 5);
+            let magic_e = is_vowel_letter(before) && !(before == 'e' && before2 == 'e');
+            if magic_e && !matches!(last, 'y') {
+                stem.push('e');
+            }
+            let stem_phones = phonemize_word(&stem, None);
+            if !stem_phones.is_empty() {
+                let mut result = stem_phones;
+                match result.last().map(|(k, _)| *k) {
+                    Some(T | D) => {
+                        result.push((IH, 0));
+                        result.push((D, 0));
+                    }
+                    Some(P | K | F | TH | S | SH | CH) => {
+                        result.push((T, 0));
+                    }
+                    _ => result.push((D, 0)),
+                }
+                return result;
+            }
+        }
+    }
 
     if n >= 2 && matches!(at(0), 'k' | 'g' | 'w' | 'p') && matches!(at(1), 'n' | 's') {
         i = 1;
@@ -706,25 +785,6 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
         }
     }
 
-    if ends_with("ed") && n > 2 {
-        let before = at(n - 3);
-        let before2 = if n > 3 { at(n - 4) } else { ' ' };
-        let is_syllabic = matches!(before, 't' | 'd');
-        if is_syllabic {
-            if out.last().is_some_and(|(k, _)| is_vowel_sound(*k)) {
-                out.push((IH, 0));
-                out.push((D, 0));
-            } else {
-                out.push((AX, 0));
-                out.push((D, 0));
-            }
-        } else if matches!(before, 'p' | 'k' | 'f' | 's' | 'h' | 'x' | 'c') {
-            out.push((T, 0));
-        } else if before2 != ' ' && (before == 'e') {
-            out.push((D, 0));
-        }
-    }
-
     assign_stress(&mut out, word);
     out
 }
@@ -777,6 +837,7 @@ fn read_vowel(chars: &[char], i: usize, out: &[(PhonemeKind, u8)]) -> Option<(Ph
             "oa" => OW,
             "oe" => OW,
             "oo" => UW,
+            "ou" if j + 1 == n && at(j) == 's' => AX, // -ous suffix (generous, various)
             "ou" => AU,
             "ow" => OW,
             "ue" => UW,
@@ -829,7 +890,10 @@ fn read_vowel(chars: &[char], i: usize, out: &[(PhonemeKind, u8)]) -> Option<(Ph
     if after_r {
         let kind = match first {
             'a' => {
-                if prev == 'w' {
+                // ar + e reads /eh r/ (care, share, scare); ar alone is /aa r/
+                if at(j + 1) == 'e' {
+                    return Some((EH, j - i + 2));
+                } else if prev == 'w' {
                     AO
                 } else {
                     AA
@@ -980,6 +1044,44 @@ mod tests {
     fn letter_spelling() {
         assert_eq!(kinds("g"), vec![JH, IY]);
         assert_eq!(kinds("q"), vec![K, Y, UW]);
+    }
+
+    #[test]
+    fn past_tense_ed() {
+        // The -ed suffix is split off and the stem re-phonemized, so dict
+        // coverage (laugh, walk, expect, examine) and magic-e stems
+        // (arrive, cause, smile) apply before the regular allomorph.
+        assert_eq!(kinds("walked"), vec![W, AO, K, T]);
+        assert_eq!(kinds("laughed"), vec![L, AE, F, T]);
+        assert_eq!(kinds("played"), vec![P, L, EY, D]);
+        assert_eq!(kinds("arrived"), vec![AX, R, AI, V, D]);
+        assert_eq!(kinds("examined"), vec![IH, G, Z, AE, M, IH, N, D]);
+        assert_eq!(kinds("expected"), vec![IH, K, S, P, EH, K, T, IH, D]);
+        assert_eq!(kinds("caused"), vec![K, AO, Z, D]);
+        assert_eq!(kinds("marched"), vec![M, AA, R, CH, T]);
+        assert_eq!(kinds("smelled"), vec![S, M, EH, L, D]);
+        assert_eq!(kinds("needed"), vec![N, IY, D, IH, D]);
+        assert_eq!(kinds("wanted"), vec![W, AA, N, T, IH, D]);
+    }
+
+    #[test]
+    fn dict_fixes() {
+        assert_eq!(kinds("absence"), vec![AE, B, S, AX, N, S]);
+        assert_eq!(kinds("scholar"), vec![S, K, AA, L, ER]);
+        assert_eq!(kinds("ocean"), vec![OW, SH, AX, N]);
+        assert_eq!(kinds("narrow"), vec![N, AE, R, OW]);
+        assert_eq!(kinds("soldiers"), vec![S, OW, L, JH, ER, Z]);
+        assert_eq!(kinds("generous"), vec![JH, EH, N, ER, AX, S]);
+        assert_eq!(kinds("house"), vec![H, AU, S]);
+        assert_eq!(kinds("museum"), vec![M, Y, UW, Z, IY, AX, M]);
+        assert_eq!(kinds("telephone"), vec![T, EH, L, AX, F, OW, N]);
+        assert_eq!(kinds("care"), vec![K, EH, R]);
+    }
+
+    #[test]
+    fn article_a_is_weak() {
+        // Lowercase "a" reads as the weak article, not the letter name.
+        assert_eq!(kinds("a"), vec![AX]);
     }
 
     #[test]

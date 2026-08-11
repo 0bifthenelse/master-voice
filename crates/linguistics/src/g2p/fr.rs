@@ -1,6 +1,8 @@
 use crate::phoneme::PhonemeKind::{self, *};
 
 const DICT_FR: &[(&str, &[PhonemeKind])] = &[
+    ("a", &[AA]),
+    ("table", &[T, AA, B, L]),
     ("aujourd'hui", &[OW, ZH, UW, RR, D, UE, IY]),
     ("monsieur", &[M, AX, S, Y, OE]),
     ("beaucoup", &[B, OW, K, UW]),
@@ -128,6 +130,12 @@ const DICT_FR: &[(&str, &[PhonemeKind])] = &[
     ("quelque", &[K, EH, L, K, AX]),
     ("difficile", &[D, IY, F, IY, S, IY, L]),
     ("quatre-vingts", &[K, AA, T, RR, AX, V, EN]),
+    ("chantent", &[SH, AN]),
+    ("courent", &[K, UW, RR]),
+    ("mangent", &[M, AN, ZH]),
+    ("marchent", &[M, AA, RR, SH]),
+    ("parlent", &[P, AA, RR, L]),
+    ("finissent", &[F, IY, N, IY, S]),
 ];
 
 pub(crate) fn lookup(word: &str) -> Option<Vec<PhonemeKind>> {
@@ -486,6 +494,10 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
                         out.push(EH);
                         i += 2;
                     }
+                } else if next == 'î' {
+                    // a circumflex i reads /eh/: plait, maitre, paraitre
+                    out.push(EH);
+                    i += 2;
                 } else if next == 'u' {
                     out.push(OW);
                     i += 2;
@@ -715,6 +727,10 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
                 } else if next == 'ù' {
                     out.push(UW);
                     i += 2;
+                } else if next == 'e' && next2 == 'u' {
+                    // oeu reads /oe/: soeurs, boeuf, voeu (not o + eu)
+                    out.push(OEU);
+                    i += 3;
                 } else if next == 'n' || next == 'm' {
                     let after = at2(i, 2);
                     if after == 'n' || after == 'm' {
@@ -752,8 +768,10 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
                         out.push(N);
                         i += 3;
                     } else if is_vowel_letter(after) || after == 'h' {
+                        // u followed by a vowel keeps the consonant: une is
+                        // /yn/, brume is /brym/; only u+m maps to UE+M here.
                         out.push(UE);
-                        out.push(M);
+                        out.push(if next == 'm' { M } else { N });
                         i += 2;
                     } else {
                         out.push(UN);
@@ -856,7 +874,8 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
                 {
                     out.push(ZH);
                     i += 1;
-                } else if next == 't' && i + 2 == n {
+                } else if next == 't' && (i + 2 == n || (i + 3 == n && at2(i, 2) == 's')) {
+                    // final gt or gts is silent (doigt, doigts)
                     i += 2;
                 } else if is_final {
                     i += 1;
@@ -999,6 +1018,9 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
                 } else if next == 't' {
                     out.push(T);
                     i += 2;
+                } else if next == 's' && i + 2 == n {
+                    // final ts is silent (enfants, puits, nuits)
+                    i += 2;
                 } else if is_final
                     && (prev == 'n'
                         || !matches!(
@@ -1124,6 +1146,49 @@ mod tests {
     #[test]
     fn elision() {
         assert_eq!(kinds("l'adresse"), vec![L, AA, D, RR, EH, S]);
+    }
+
+    #[test]
+    fn une_keeps_n() {
+        // u + n + vowel keeps the consonant: une is /yn/, not /ym/.
+        assert_eq!(kinds("une"), vec![UE, N]);
+        assert_eq!(kinds("lune"), vec![L, UE, N]);
+    }
+
+    #[test]
+    fn plait_is_eh() {
+        // a circumflex i reads /eh/ and the final t is silent.
+        assert_eq!(kinds("plaît"), vec![P, L, EH]);
+        assert_eq!(kinds("maître"), vec![M, EH, T, RR]);
+    }
+
+    #[test]
+    fn oeu_digraph() {
+        // oeu after a consonant reads /oe/: soeurs, boeuf.
+        assert_eq!(kinds("soeurs"), vec![S, OEU, RR]);
+        assert_eq!(kinds("boeuf"), vec![B, OEU, F]);
+    }
+
+    #[test]
+    fn final_ts_silent() {
+        // final ts is silent: enfants, puits, doigts.
+        assert_eq!(kinds("enfants"), vec![AN, F, AN]);
+        assert_eq!(kinds("puits"), vec![P, Y, IY]);
+        assert_eq!(kinds("doigts"), vec![D, W, AA]);
+    }
+
+    #[test]
+    fn verb_plural_ent_silent() {
+        // Third-person plural -ent is silent for these verb forms.
+        assert_eq!(kinds("chantent"), vec![SH, AN]);
+        assert_eq!(kinds("courent"), vec![K, UW, RR]);
+        assert_eq!(kinds("mangent"), vec![M, AN, ZH]);
+        assert_eq!(kinds("parlent"), vec![P, AA, RR, L]);
+    }
+
+    #[test]
+    fn table_french() {
+        assert_eq!(kinds("table"), vec![T, AA, B, L]);
     }
 
     #[test]

@@ -964,9 +964,35 @@ affect AX0 F EH1 K T
 afford AX0 F AO1 R D
 afraid AX0 F R EY1 D
 breeze B R IY1 Z
+bus B AH1 S
 closing K L OW1 Z IH0 NG
 precise P R IH0 S AY1 S
 save S EY1 V
+absence AE1 B S AX0 N S
+area EH1 R IY0 AX0
+aren't AA1 R AX0 N T
+arrive AX0 R AY1 V
+beloved B IH0 L AH1 V IH0 D
+carefully K EH1 R F AX0 L IY
+common K AA1 M AX0 N
+concept K AA1 N S EH0 P T
+contact K AA1 N T AE0 K T
+crooked K R UH1 K IH0 D
+generous JH EH1 N ER0 AX0 S
+hatred H EY1 T R IH0 D
+house H AW1 S
+mirror M IH1 R ER0
+museum M Y UW0 Z IY1 AX0 M
+moment M OW1 M AX0 N T
+naked N EY1 K IH0 D
+narrow N AE1 R OW0
+ocean OW1 SH AX N
+question K W EH1 S CH AX0 N
+sacred S EY1 K R IH0 D
+scholar S K AA1 L ER0
+telephone T EH1 L AX0 F OW N
+tradition T R AX0 D IH1 SH AX N
+wicked W IH1 K IH0 D
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
