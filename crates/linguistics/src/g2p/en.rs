@@ -704,7 +704,7 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
 
     if ends_with("ed") && n > 2 {
         let before = at(n - 3);
-        let before2 = at(n - 4);
+        let before2 = if n > 3 { at(n - 4) } else { ' ' };
         let is_syllabic = matches!(before, 't' | 'd');
         if is_syllabic {
             if out.last().is_some_and(|(k, _)| is_vowel_sound(*k)) {

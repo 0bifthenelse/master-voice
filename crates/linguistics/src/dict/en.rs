@@ -508,6 +508,27 @@ told T OW1 L D
 tuesday T UW1 Z D EY0
 won W AH1 N
 wore W AO1 R
+bed B EH1 D
+decided D IH0 S AY1 D IH0 D
+developed D IH0 V EH1 L AX0 P T
+ended EH1 N D IH0 D
+happened HH AE1 P AX0 N D
+helped HH EH1 L P T
+included IH0 N K L UW1 D IH0 D
+led L EH1 D
+listened L IH1 S AX0 N D
+looked L UH1 K T
+loved L AH1 V D
+opened OW1 P AX0 N D
+played P L EY1 D
+provided P R AX0 V AY1 D IH0 D
+received R IH0 S IY1 V D
+red R EH1 D
+seemed S IY1 M D
+talked T AO1 K T
+wanted W AA1 N T IH0 D
+wed W EH1 D
+worked W ER1 K T
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
