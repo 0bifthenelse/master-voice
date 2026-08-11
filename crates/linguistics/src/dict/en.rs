@@ -951,6 +951,14 @@ straight S T R EY1 T
 terrible T EH1 R AX0 B AX0 L
 trough T R AO1 F
 visible V IH1 Z AX0 B AX0 L
+ability AX0 B IH1 L IH0 T IY0
+community K AX0 M Y UW1 N IH0 T IY0
+company K AH1 M P AX0 N IY0
+possibility P AA2 S AX0 B IH1 L IH0 T IY0
+safety S EY1 F T IY0
+twentieth T W EH1 N T IY0 AX0 TH
+university Y UW2 N IH0 V ER1 S IH0 T IY0
+variety V AX0 R AY1 AX0 T IY0
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
