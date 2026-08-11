@@ -654,6 +654,8 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
                     }
                     i += 2;
                 } else if i == 0 && next == 'r' {
+                    // word-initial wr: silent w, pronounced r (write, wrong)
+                    out.push((R, 0));
                     i += 2;
                 } else {
                     out.push((W, 0));

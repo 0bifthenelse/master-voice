@@ -423,6 +423,25 @@ trouble T R AH1 B AX0 L
 wear W EH1 R
 wood W UH1 D
 young Y AH1 NG
+against AX0 G EH1 N S T
+beautiful B Y UW1 T IH0 F AX0 L
+believe B IH0 L IY1 V
+children CH IH1 L D R AX0 N
+clothes K L OW1 DH Z
+example IH0 G Z AE1 M P AX0 L
+friend F R EH1 N D
+important IH0 M P AO1 R T AX0 N T
+know N OW1
+language L AE1 NG G W IH0 JH
+maybe M EY1 B IY0
+remember R IH0 M EH1 M B ER0
+something S AH1 M TH IH0 NG
+sometimes S AH1 M T AY1 M Z
+special S P EH1 SH AX0 L
+together T AX0 G EH1 DH ER0
+weather W EH1 DH ER0
+woman W UH1 M AX0 N
+write R AY1 T
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
