@@ -959,6 +959,10 @@ safety S EY1 F T IY0
 twentieth T W EH1 N T IY0 AX0 TH
 university Y UW2 N IH0 V ER1 S IH0 T IY0
 variety V AX0 R AY1 AX0 T IY0
+admit AX0 D M IH1 T
+affect AX0 F EH1 K T
+afford AX0 F AO1 R D
+afraid AX0 F R EY1 D
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
