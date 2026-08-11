@@ -483,6 +483,31 @@ power P AW1 ER0
 problem P R AA1 B L AX0 M
 tire T AY1 ER0
 wire W AY1 ER0
+became B IH0 K EY1 M
+began B IH0 G AE1 N
+begun B IH0 G AH1 N
+caught K AO1 T
+doing D UW1 IH0 NG
+eighth EY1 T TH
+forgot F ER0 G AA1 T
+fourth F AO1 R TH
+friday F R AY1 D EY0
+given G IH1 V AX0 N
+going G OW1 IH0 NG
+knew N UW1
+known N OW1 N
+monday M AH1 N D EY0
+ninth N AY1 N TH
+saturday S AE1 T ER0 D EY0
+saw S AO1
+sold S OW1 L D
+sunday S AH1 N D EY0
+taught T AO1 T
+thursday TH ER1 Z D EY0
+told T OW1 L D
+tuesday T UW1 Z D EY0
+won W AH1 N
+wore W AO1 R
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
