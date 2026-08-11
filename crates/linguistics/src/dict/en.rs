@@ -174,7 +174,7 @@ systems S IH1 S T AX0 M Z
 synthesis S IH1 N TH AX0 S IH0 S
 degrees D IH0 G R IY1 Z
 take T EY1 K
-temperature T EH1 M P ER0 AH0 CH ER0
+temperature T EH1 M P R AX0 CH ER0
 than DH AE1 N
 that DH AE1 T
 the DH AH0
@@ -926,6 +926,31 @@ nowhere N OW1 W EH2 R
 orchestra AO1 R K EH0 S T R AX0
 somewhere S AH1 M W EH2 R
 took T UH1 K
+billion B IH1 L Y AX0 N
+curious K Y UH1 R IY0 AX0 S
+dangerous D EY1 N JH ER0 AX0 S
+draught D R AE1 F T
+eighteen EY1 T IY1 N
+eightieth EY1 T IY0 AX0 TH
+famous F EY1 M AX0 S
+fourteen F AO1 R T IY2 N
+freight F R EY1 T
+honor AA1 N ER0
+honorable AA1 N ER0 AX0 B AX0 L
+horrible H AO1 R AX0 B AX0 L
+incredible IH0 N K R EH1 D AX0 B AX0 L
+laughter L AE1 F T ER0
+literature L IH1 T ER0 AX0 CH ER0
+nervous N ER1 V AX0 S
+nineteen N AY1 N T IY2 N
+obvious AA1 B V IY0 AX0 S
+previous P R IY1 V IY0 AX0 S
+reasonable R IY1 Z AX0 N AX0 B AX0 L
+slough S L AH1 F
+straight S T R EY1 T
+terrible T EH1 R AX0 B AX0 L
+trough T R AO1 F
+visible V IH1 Z AX0 B AX0 L
 "#;
 
 pub fn lookup(word: &str) -> Option<&'static str> {
@@ -946,7 +971,7 @@ mod tests {
     fn finds_entries() {
         assert_eq!(lookup("master"), Some("M AE1 S T ER0"));
         assert_eq!(lookup("MASTER"), Some("M AE1 S T ER0"));
-        assert_eq!(lookup("temperature"), Some("T EH1 M P ER0 AH0 CH ER0"));
+        assert_eq!(lookup("temperature"), Some("T EH1 M P R AX0 CH ER0"));
         assert_eq!(lookup("zzzqqq"), None);
     }
 }

@@ -247,7 +247,7 @@ mod tests {
                 Some(Language::English)
             ),
             vec![
-                DH, AH, T, EH, M, P, ER, AH, CH, ER, IH, Z, T, W, EH, N, T, IY, W, AH, N, P, OI, N,
+                DH, AH, T, EH, M, P, R, AX, CH, ER, IH, Z, T, W, EH, N, T, IY, W, AH, N, P, OI, N,
                 T, F, AI, V, D, IH, G, R, IY, Z
             ]
         );

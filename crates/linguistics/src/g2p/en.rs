@@ -397,12 +397,16 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
                     i += 2;
                 } else if next == 'h' {
                     let after: String = chars[i + 2..].iter().collect();
-                    if after.is_empty() {
-                        i += 2;
-                    } else if after.starts_with('t') || matches!(next2, 't') {
-                        out.push((F, 0));
-                        i += 2;
-                    } else if matches!(next2, 'e' | 'i' | 'y') && !after.starts_with('t') {
+                    if after.is_empty()
+                        || matches!(next2, 'e' | 'i' | 'y')
+                        || after.starts_with('t')
+                        || matches!(next2, 't')
+                    {
+                        // gh is silent word-finally, before e/i/y, and
+                        // before t in ight/eigh/aigh/ough+t words
+                        // (straight, eighteen, freight, bought, daughter);
+                        // the F pronunciation (laugh, cough, tough, rough,
+                        // enough) lives in the dictionary.
                         i += 2;
                     } else {
                         out.push((G, 0));
@@ -938,7 +942,7 @@ mod tests {
     fn corpus_words() {
         assert_eq!(kinds("voice"), vec![V, OI, S]);
         assert_eq!(kinds("master"), vec![M, AE, S, T, ER]);
-        assert_eq!(kinds("temperature"), vec![T, EH, M, P, ER, AH, CH, ER]);
+        assert_eq!(kinds("temperature"), vec![T, EH, M, P, R, AX, CH, ER]);
         assert_eq!(kinds("degrees"), vec![D, IH, G, R, IY, Z]);
         assert_eq!(kinds("synthesis"), vec![S, IH, N, TH, AX, S, IH, S]);
     }
