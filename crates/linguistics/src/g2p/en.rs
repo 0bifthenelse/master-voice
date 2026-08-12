@@ -292,7 +292,13 @@ fn try_plural_dict(word: &str) -> Option<Vec<(PhonemeKind, u8)>> {
     if stem.len() < 3 {
         return None;
     }
-    let mut parsed = parse_dict_entry(lookup(stem)?);
+    let entry = lookup(stem).or_else(|| {
+        let mut magic_e_stem = String::with_capacity(stem.len() + 1);
+        magic_e_stem.push_str(stem);
+        magic_e_stem.push('e');
+        lookup(&magic_e_stem)
+    })?;
+    let mut parsed = parse_dict_entry(entry);
     let sibilant = matches!(
         parsed.last().map(|(k, _)| *k),
         Some(S | Z | SH | ZH | CH | JH)
@@ -357,7 +363,7 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
             let before = at(n - 4);
             let before2 = at(n - 5);
             let magic_e = is_vowel_letter(before) && !(before == 'e' && before2 == 'e');
-            if magic_e && !matches!(last, 'y') {
+            if magic_e && !matches!(last, 'y') && lookup(&stem).is_none() {
                 stem.push('e');
             }
             let stem_phones = phonemize_word(&stem, None);
@@ -1076,6 +1082,13 @@ mod tests {
         assert_eq!(kinds("museum"), vec![M, Y, UW, Z, IY, AX, M]);
         assert_eq!(kinds("telephone"), vec![T, EH, L, AX, F, OW, N]);
         assert_eq!(kinds("care"), vec![K, EH, R]);
+        assert_eq!(kinds("authors"), vec![AO, TH, ER, Z]);
+        assert_eq!(kinds("folders"), vec![F, OW, L, D, ER, Z]);
+        assert_eq!(kinds("gathered"), vec![G, AE, DH, ER, D]);
+        assert_eq!(kinds("pauses"), vec![P, AO, Z, IH, Z]);
+        assert_eq!(kinds("rhythmic"), vec![R, IH, DH, M, IH, K]);
+        assert_eq!(kinds("strange"), vec![S, T, R, EY, N, JH]);
+        assert_eq!(kinds("thoughtful"), vec![TH, AO, T, F, AX, L]);
     }
 
     #[test]

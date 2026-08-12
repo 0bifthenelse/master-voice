@@ -212,3 +212,20 @@ fn streaming_state_keeps_phrase_join_continuous() {
     .abs();
     assert!(discontinuity < 0.02, "join discontinuity {discontinuity}");
 }
+
+#[test]
+fn dense_phone_transitions_bound_sample_steps() {
+    let mut phones = Vec::with_capacity(ALL_KINDS.len() * 2);
+    for kind in ALL_KINDS.into_iter().chain(ALL_KINDS.into_iter().rev()) {
+        phones.push(phone(kind, Boundary::None));
+    }
+    phones.last_mut().expect("phone").boundary_after = Boundary::Sentence;
+
+    let buffer = synthesize(&phones, &SynthOptions::default());
+    let max_step = buffer
+        .samples
+        .windows(2)
+        .map(|pair| (pair[1] - pair[0]).abs())
+        .fold(0.0, f32::max);
+    assert!(max_step <= 1.0, "maximum sample step {max_step}");
+}

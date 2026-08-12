@@ -115,6 +115,7 @@ const DICT_FR: &[(&str, &[PhonemeKind])] = &[
     ("cercueil", &[S, EH, RR, K, OEU, Y]),
     ("chauffeur", &[SH, OW, F, OEU, RR]),
     ("cœur", &[K, OEU, RR]),
+    ("créent", &[K, RR, EY]),
     ("deuxième", &[D, OE, Z, Y, EH, M]),
     ("fier", &[F, Y, EH, RR]),
     ("loyal", &[L, W, AA, Y, AA, L]),
@@ -126,6 +127,7 @@ const DICT_FR: &[(&str, &[PhonemeKind])] = &[
     ("sœur", &[S, OEU, RR]),
     ("soeur", &[S, OEU, RR]),
     ("voyage", &[V, W, AA, Y, AA, ZH]),
+    ("œuvre", &[OEU, V, RR]),
     ("yeux", &[Y, OE]),
     ("quelque", &[K, EH, L, K, AX]),
     ("difficile", &[D, IY, F, IY, S, IY, L]),
@@ -687,6 +689,9 @@ fn rules(word: &str) -> Vec<(PhonemeKind, u8)> {
                         out.push(L);
                         i += 3;
                     }
+                } else if matches!(next, 'a' | 'o' | 'u') {
+                    out.push(Y);
+                    i += 1;
                 } else {
                     out.push(IY);
                     i += 1;
@@ -1141,6 +1146,9 @@ mod tests {
         assert_eq!(kinds("année"), vec![AA, N, EY]);
         assert_eq!(kinds("abord"), vec![AA, B, AO, RR]);
         assert_eq!(kinds("où"), vec![UW]);
+        assert_eq!(kinds("étudiants"), vec![EY, T, UE, D, Y, AN]);
+        assert_eq!(kinds("créent"), vec![K, RR, EY]);
+        assert_eq!(kinds("œuvre"), vec![OEU, V, RR]);
     }
 
     #[test]

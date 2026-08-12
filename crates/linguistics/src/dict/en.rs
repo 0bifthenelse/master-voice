@@ -291,8 +291,11 @@ phew F Y UW1
 ahem AH0 HH EH1 M
 oof UW1 F
 autumn AO1 T AX0 M
+author AO1 TH ER0
 careful K EH1 R F AX0 L
 engineer EH2 N JH IH0 N IH1 R
+folder F OW1 L D ER0
+gather G AE1 DH ER0
 garden G AA1 R D AX0 N
 gentle JH EH1 N T AX0 L
 leaves L IY1 V Z
@@ -331,11 +334,15 @@ probably P R AA1 B AX0 B L IY0
 psychology S AY0 K AA1 L AX0 JH IY0
 receipt R IH0 S IY1 T
 rhythm R IH1 DH AX0 M
+pause P AO1 Z
+rhythmic R IH1 DH M IH0 K
 several S EH1 V R AX0 L
 subtle S AH1 T AX0 L
 sword S AO1 R D
 though DH OW1
 thought TH AO1 T
+strange S T R EY1 N JH
+thoughtful TH AO1 T F AX0 L
 tomb T UW1 M
 vegetable V EH1 JH T AX0 B AX0 L
 vehicle V IY1 IH0 K AX0 L

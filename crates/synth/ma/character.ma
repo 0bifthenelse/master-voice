@@ -15,6 +15,8 @@ mv_character_sample:
     comiss mv_c_zero(%rip), %xmm1
     jbe .Lcharacter_bypass
     movaps %xmm0, %xmm7
+    testl $1, MV_OPT_FLAGS(%rsi)
+    jz .Lcharacter_presence
     movss MV_STATE_RING_PHASE(%rdi), %xmm2
     addss mv_c_ring_step(%rip), %xmm2
     comiss mv_c_one(%rip), %xmm2
@@ -35,6 +37,7 @@ mv_character_sample:
     mulss mv_character_ring_mix(%rip), %xmm6
     mulss %xmm6, %xmm5
     addss %xmm5, %xmm7
+.Lcharacter_presence:
     movaps %xmm7, %xmm5
     subss MV_STATE_PREV_OUT(%rdi), %xmm5
     mulss mv_c_presence(%rip), %xmm5

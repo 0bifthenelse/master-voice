@@ -1,9 +1,10 @@
 mod ffi;
 
-use master_voice_linguistics::phoneme::Phoneme;
+use master_voice_linguistics::phoneme::{Phoneme, PhonemeKind};
 
 pub const SAMPLE_RATE: u32 = 24_000;
 pub const DEFAULT_RATE: f32 = 0.75;
+pub const DEFAULT_PITCH: f32 = 0.65;
 pub const DEFAULT_ROBOTIC_DEPTH: f32 = 0.22;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -24,7 +25,7 @@ impl Default for SynthOptions {
     fn default() -> Self {
         Self {
             rate: DEFAULT_RATE,
-            pitch: 1.0,
+            pitch: DEFAULT_PITCH,
             volume: 1.0,
             robotic_depth: DEFAULT_ROBOTIC_DEPTH,
         }
@@ -88,12 +89,28 @@ pub fn render_chunk(
     position: ChunkPos,
 ) -> AudioBuffer {
     let phones = ffi::encode_phones(phonemes);
-    let options = ffi::options(
+    let mut options = ffi::options(
         options.rate,
         options.pitch,
         options.volume,
         options.robotic_depth,
     );
+    if phonemes.iter().any(|phoneme| {
+        matches!(
+            phoneme.kind,
+            PhonemeKind::UE
+                | PhonemeKind::OE
+                | PhonemeKind::OEU
+                | PhonemeKind::EN
+                | PhonemeKind::AN
+                | PhonemeKind::ON
+                | PhonemeKind::UN
+                | PhonemeKind::NY
+                | PhonemeKind::RR
+        )
+    }) {
+        options.flags = 1;
+    }
     let sample_count = ffi::measure(&phones, &options, position.first, position.last)
         .unwrap_or_else(|error| panic!("master assembly measurement failed: {error}"));
     let mut samples = vec![0.0; sample_count];
