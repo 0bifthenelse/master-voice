@@ -1,0 +1,45 @@
+{
+  "canonical_en": [
+    "I HEREBY ACKNOWLEDGE THAT MY NAME IS MASTER"
+  ],
+  "heldout_en": [
+    "The careful engineer checked three pressure gauges before sunrise.",
+    "Can the autonomous system explain why the warning light flashed twice?",
+    "Dr. Morgan recorded twenty-seven measurements at 8:30 p.m.",
+    "After walking through the narrow corridor, we opened the emergency door.",
+    "Please confirm that every silver package arrived safely on Thursday.",
+    "The quiet machine hums beside a wooden table while the operator writes.",
+    "If the voltage falls below twelve volts, switch the backup circuit on.",
+    "Which folder contains the revised schedule for next month's inspection?",
+    "Our thoughtful captain gathered the crew and described the strange signal.",
+    "Although the weather changed quickly, the aircraft remained perfectly stable.",
+    "The museum closes at six, but the final bus leaves fifteen minutes later.",
+    "CPU status is normal; API requests completed without errors."
+  ],
+  "heldout_fr": [
+    "Le professeur explique calmement pourquoi les étudiants ferment la fenêtre.",
+    "Pouvez-vous vérifier que chaque paquet rouge est arrivé jeudi matin ?",
+    "À huit heures trente, le docteur Martin mesure vingt-sept valeurs différentes.",
+    "Après avoir traversé le couloir étroit, nous ouvrons la porte de secours.",
+    "Cette petite fille écoute une histoire pendant que son frère écrit.",
+    "Si la tension descend sous douze volts, activez immédiatement le circuit de secours.",
+    "Pourquoi les oiseaux chantent-ils lorsque la lumière revient ?",
+    "Nos ingénieurs observent le moteur, corrigent les erreurs et reprennent les essais.",
+    "Le musée ferme à six heures, mais le dernier autobus part quinze minutes plus tard.",
+    "Une œuvre étrange apparaît près du vieux château pendant la nuit.",
+    "Les enfants mangent du pain chaud et boivent un peu d'eau.",
+    "Le système automatique répond correctement aux questions difficiles."
+  ],
+  "tuning_en": [
+    "Bright stars shimmer above the silent ocean.",
+    "Pack the blue glass box beside the warm engine.",
+    "Three fresh roses grow near the northern wall.",
+    "Why did the careful pilot change course?"
+  ],
+  "tuning_fr": [
+    "Bonjour, voici une phrase française claire et naturelle.",
+    "Le professeur parle doucement aux jeunes enfants.",
+    "Un grand oiseau rouge vole au-dessus du jardin.",
+    "Pourquoi faut-il fermer cette petite porte ?"
+  ]
+}

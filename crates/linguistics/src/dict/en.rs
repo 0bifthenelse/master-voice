@@ -2,6 +2,7 @@ pub const DICT_EN: &str = r#"
 a AX0
 about AX0 B AW1 T
 above AX0 B AH1 V
+acknowledge AX0 K N AA1 L IH0 JH
 after AE1 F T ER0
 afternoon AE2 F T ER0 N UW1 N
 again AX0 G EH1 N
@@ -71,6 +72,7 @@ he HH IY1
 hello HH AH0 L OW1
 her HH ER1
 here HH IH1 R
+hereby HH IH0 R B AY1
 him HH IH1 M
 his HH IH1 Z
 home HH OW1 M

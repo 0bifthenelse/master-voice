@@ -833,7 +833,7 @@ fn read_vowel(chars: &[char], i: usize, out: &[(PhonemeKind, u8)]) -> Option<(Ph
             return Some((kind, j - i));
         }
         let kind = match g {
-            "ai" | "ay" => EI,
+            "ai" | "ay" => EY,
             "au" | "aw" => AO,
             "ea" => IY,
             "ee" => IY,
@@ -937,7 +937,7 @@ fn read_vowel(chars: &[char], i: usize, out: &[(PhonemeKind, u8)]) -> Option<(Ph
 
     if magic_e || le_suffix {
         let kind = match first {
-            'a' => EI,
+            'a' => EY,
             'e' => IY,
             'i' => AI,
             'o' => OW,
@@ -1020,10 +1020,12 @@ mod tests {
     #[test]
     fn rules_regular() {
         assert_eq!(kinds("hello"), vec![H, AH, L, OW]);
-        assert_eq!(kinds("make"), vec![M, EI, K]);
+        assert_eq!(kinds("make"), vec![M, EY, K]);
         assert_eq!(kinds("time"), vec![T, AI, M]);
         assert_eq!(kinds("note"), vec![N, OW, T]);
         assert_eq!(kinds("cat"), vec![K, AE, T]);
+        assert_eq!(kinds("name"), vec![N, EY, M]);
+        assert_eq!(kinds("rain"), vec![R, EY, N]);
         assert_eq!(kinds("ship"), vec![SH, IH, P]);
         assert_eq!(kinds("thin"), vec![TH, IH, N]);
         assert_eq!(kinds("phone"), vec![F, OW, N]);

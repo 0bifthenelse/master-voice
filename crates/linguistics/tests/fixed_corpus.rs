@@ -101,6 +101,30 @@ fn english_context_selects_past_read_and_record_stress() {
 }
 
 #[test]
+fn canonical_master_sentence_has_expected_words() {
+    use PhonemeKind::{AA, AE, AI, AX, B, DH, ER, EY, H, IH, JH, K, L, M, N, R, S, T, Z};
+    let utterance = phonemize(
+        "I HEREBY ACKNOWLEDGE THAT MY NAME IS MASTER",
+        Some(Language::English),
+        &Overrides::default(),
+    )
+    .expect("canonical sentence");
+    assert_eq!(
+        word_phones(&utterance.phonemes),
+        vec![
+            vec![AI],
+            vec![H, IH, R, B, AI],
+            vec![AX, K, N, AA, L, IH, JH],
+            vec![DH, AE, T],
+            vec![M, AI],
+            vec![N, EY, M],
+            vec![IH, Z],
+            vec![M, AE, S, T, ER],
+        ]
+    );
+}
+
+#[test]
 fn french_dictionary_nuclei_liaisons_and_fils_context_are_explicit() {
     use PhonemeKind::{AO, B, F, IY, K, L, N, OW, S, UN, UW, Z};
     let liaisons = phonemize(
